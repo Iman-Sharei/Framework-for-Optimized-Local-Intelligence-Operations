@@ -18,22 +18,25 @@ GitHub repos into chat — lower token use, grounded citations.
 
 ## Install (once on this machine)
 
-```bash
-# from this checkout
-cd ~/Desktop/folio   # or clone the GitHub repo
-python3.12 -m venv .venv
-.venv/bin/pip install -U pip
-.venv/bin/pip install -e .
+PyPI distribution name is **`folio-cli`** (plain `folio` is taken). The CLI command is still **`folio`**.
 
-# put on PATH
-ln -sfn "$(pwd)/.venv/bin/folio" ~/.local/bin/folio
+```bash
+uv tool install folio-cli
+folio --help
 ```
 
-Later (when published):
+From a checkout (editable / unreleased):
 
 ```bash
-uv tool install folio          # or folio-cli if the name is taken on PyPI
-# or: uv tool install git+https://github.com/<you>/folio
+cd ~/Desktop/folio
+uv tool install --editable .
+# or: uv sync && uv run folio status
+```
+
+Git install without waiting for PyPI:
+
+```bash
+uv tool install git+https://github.com/Iman-Sharei/folio
 ```
 
 ## Get the knowledge index
@@ -100,13 +103,37 @@ folio uninstall --project [--purge]
 ## Tests
 
 ```bash
-pip install -e ".[dev]"
-pytest -q                  # all
-pytest -q -m "not integration"   # fast (no Chroma embed)
-pytest -q -m integration         # sync + ingest + retrieve + pack
+uv sync --extra dev
+uv run pytest -q                  # all
+uv run pytest -q -m "not integration"   # fast (no Chroma embed)
+uv run pytest -q -m integration         # sync + ingest + retrieve + pack
 ```
 
-CI runs both layers on Python 3.11/3.12. Tag `v*` to build a Release index pack via GitHub Actions.
+CI runs both layers on Python 3.11/3.12. Tag `vX.Y.Z` to:
+- upload the curricula index pack (`folio-index.tar.gz`) to the GitHub Release
+- publish the `folio-cli` wheel/sdist to PyPI (Trusted Publishing; see below)
+
+## Maintainer: publish `folio-cli` to PyPI
+
+One-time setup (API token **or** Trusted Publishing):
+
+```bash
+./scripts/publish-pypi-wizard.sh
+```
+
+After Trusted Publishing is configured, a version tag is enough:
+
+```bash
+git tag -a v0.3.0 -m v0.3.0
+git push origin v0.3.0
+```
+
+Manual local publish (token in env):
+
+```bash
+uv build
+UV_PUBLISH_TOKEN=pypi-... uv publish
+```
 
 ## Maintainer: publish index for `folio bootstrap`
 

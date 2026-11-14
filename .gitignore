@@ -3,10 +3,14 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
+!dist/.gitignore
 build/
+src/*.egg-info/
+*.egg-info/
 aieng-out/
 folio-out/
 data/
 .cache/
 *.pkl
 *.tar.gz
+.env
