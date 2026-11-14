@@ -29,8 +29,10 @@ From a checkout (editable / unreleased):
 
 ```bash
 cd ~/Desktop/folio
+uv sync                 # creates .venv + uv.lock-backed env
+uv run folio status
+# or install the CLI globally from this tree:
 uv tool install --editable .
-# or: uv sync && uv run folio status
 ```
 
 Git install without waiting for PyPI:
@@ -103,7 +105,7 @@ folio uninstall --project [--purge]
 ## Tests
 
 ```bash
-uv sync --extra dev
+uv sync
 uv run pytest -q                  # all
 uv run pytest -q -m "not integration"   # fast (no Chroma embed)
 uv run pytest -q -m integration         # sync + ingest + retrieve + pack
@@ -124,8 +126,8 @@ One-time setup (API token **or** Trusted Publishing):
 After Trusted Publishing is configured, a version tag is enough:
 
 ```bash
-git tag -a v0.3.0 -m v0.3.0
-git push origin v0.3.0
+git tag -a v0.3.1 -m v0.3.1
+git push origin v0.3.1
 ```
 
 Manual local publish (token in env):
