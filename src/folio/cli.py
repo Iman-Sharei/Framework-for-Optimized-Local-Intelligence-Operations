@@ -17,10 +17,14 @@ from .sync import sync_sources
 
 
 def _cli_version() -> str:
+    # PyPI distribution is folio-cli; import package remains folio.
     try:
-        return pkg_version("folio")
+        return pkg_version("folio-cli")
     except PackageNotFoundError:
-        return __version__
+        try:
+            return pkg_version("folio")
+        except PackageNotFoundError:
+            return __version__
 
 
 def _cfg(args: argparse.Namespace) -> dict:

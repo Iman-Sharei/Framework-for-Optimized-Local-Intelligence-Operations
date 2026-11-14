@@ -16,11 +16,47 @@ from .sync import sync_sources
 
 # Files/dirs included in a portable index pack (query-ready without sources).
 _PACK_MEMBERS = ("chroma", "bm25", "manifest.json", "config.yaml")
+_PACK_TOP = frozenset(_PACK_MEMBERS)
 
 
 def _release_url(cfg: dict[str, Any]) -> str:
     release = cfg.get("release") or {}
     return (release.get("index_url") or "").strip()
+
+
+def _require_https_url(url: str) -> str:
+    """Bootstrap downloads must be https (blocks file:// and SSRF-ish schemes)."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError(
+            f"Refusing non-https index URL (scheme={parsed.scheme!r}). "
+            "Use https://… or pass a local --archive path."
+        )
+    return url
+
+
+def _safe_tar_members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
+    """Allowlist pack members; reject path traversal, absolute paths, and links."""
+    safe: list[tarfile.TarInfo] = []
+    for member in tar.getmembers():
+        name = member.name
+        if name.startswith("./"):
+            name = name[2:]
+        parts = Path(name).parts
+        if not parts or parts[0] not in _PACK_TOP:
+            continue
+        if Path(name).is_absolute() or ".." in parts:
+            raise RuntimeError(f"Unsafe tar member path: {member.name!r}")
+        if member.issym() or member.islnk():
+            raise RuntimeError(f"Tar symlinks/hardlinks are not allowed: {member.name!r}")
+        # Re-bind normalized relative name for extract.
+        member.name = name
+        safe.append(member)
+    if not safe:
+        raise RuntimeError("Invalid index pack: no allowed members found")
+    return safe
 
 
 def pack_index(cfg: dict[str, Any], *, dest: Path | None = None) -> Path:
@@ -51,8 +87,12 @@ def pack_index(cfg: dict[str, Any], *, dest: Path | None = None) -> Path:
 def _extract_pack(archive: Path, dest: Path) -> None:
     dest.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:gz") as tar:
-        # Python 3.12+ supports filter=; keep compatible extract.
-        tar.extractall(dest)  # noqa: S202 — local/trusted release asset
+        members = _safe_tar_members(tar)
+        # Prefer PEP 706 data filter when available (3.12+).
+        extract_kw: dict[str, Any] = {"path": dest, "members": members}
+        if hasattr(tarfile, "data_filter"):
+            extract_kw["filter"] = "data"
+        tar.extractall(**extract_kw)
 
 
 def bootstrap_index(
@@ -87,6 +127,8 @@ def bootstrap_index(
             "pass --url, or run `folio build` / `folio update --from-source`."
         )
 
+    resolved = _require_https_url(resolved)
+
     with tempfile.TemporaryDirectory(prefix="folio-bootstrap-") as tmp:
         tmp_path = Path(tmp) / "folio-index.tar.gz"
         print(f"[bootstrap] downloading {resolved}")
@@ -115,10 +157,16 @@ def _extract_into_out(archive: Path, out: Path) -> None:
                     shutil.rmtree(dest)
                 else:
                     dest.unlink()
+            if src.is_symlink():
+                raise RuntimeError(f"Refusing symlink pack member: {src}")
             if src.is_dir():
-                shutil.copytree(src, dest)
+                # symlinks=True copies link nodes as links (does not follow into secrets).
+                shutil.copytree(src, dest, symlinks=True, ignore_dangling_symlinks=False)
+                for p in dest.rglob("*"):
+                    if p.is_symlink():
+                        raise RuntimeError(f"Refusing symlink inside pack member {name}: {p}")
             else:
-                shutil.copy2(src, dest)
+                shutil.copy2(src, dest, follow_symlinks=False)
 
 
 def update_index(

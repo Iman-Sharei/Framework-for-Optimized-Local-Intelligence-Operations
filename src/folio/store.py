@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import pickle
 import shutil
@@ -12,6 +13,27 @@ from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 from rank_bm25 import BM25Okapi
 
 from .chunk import Chunk
+
+# Legacy pickle allowlist (BM25Okapi is pure-Python; block __reduce__ gadgets).
+_PICKLE_ALLOWED = {
+    ("builtins", "dict"),
+    ("builtins", "list"),
+    ("builtins", "tuple"),
+    ("builtins", "str"),
+    ("builtins", "int"),
+    ("builtins", "float"),
+    ("builtins", "bool"),
+    ("builtins", "set"),
+    ("builtins", "frozenset"),
+    ("rank_bm25", "BM25Okapi"),
+}
+
+
+class _RestrictedBm25Unpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if (module, name) not in _PICKLE_ALLOWED:
+            raise pickle.UnpicklingError(f"Refusing to unpickle {module}.{name}")
+        return super().find_class(module, name)
 
 
 def _ensure_local_chroma_cache(model_cache_dir: Path | None = None) -> Path:
@@ -103,18 +125,47 @@ def build_bm25(chunks: list[Chunk]) -> tuple[BM25Okapi, list[str], list[Chunk]]:
     return BM25Okapi(tokenized), [c.chunk_id for c in chunks], chunks
 
 
+def _bm25_json_path(path: Path) -> Path:
+    """Prefer index.json alongside (or instead of) legacy index.pkl."""
+    if path.suffix == ".json":
+        return path
+    return path.with_suffix(".json")
+
+
 def save_bm25(path: Path, bm25: BM25Okapi, ids: list[str], chunks: list[Chunk]) -> None:
+    """Persist BM25 corpus as JSON and rebuild the index on load (no pickle)."""
+    del bm25  # rebuilt from texts on load
     path.parent.mkdir(parents=True, exist_ok=True)
+    json_path = _bm25_json_path(path)
     payload = {
-        "bm25": bm25,
         "ids": ids,
         "texts": [c.text for c in chunks],
         "metadatas": [c.to_metadata() for c in chunks],
     }
-    with path.open("wb") as f:
-        pickle.dump(payload, f)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    # Remove legacy pickle so packs don't ship an RCE surface.
+    if path.suffix == ".pkl" and path.exists():
+        path.unlink()
 
 
 def load_bm25(path: Path) -> dict[str, Any]:
+    json_path = _bm25_json_path(path)
+
+    if json_path.exists():
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        texts: list[str] = data["texts"]
+        ids: list[str] = data["ids"]
+        metas: list[dict] = data["metadatas"]
+        tokenized = [t.lower().split() for t in texts]
+        bm25 = BM25Okapi(tokenized) if tokenized else BM25Okapi([["_"]])
+        return {"bm25": bm25, "ids": ids, "texts": texts, "metadatas": metas}
+
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    # Legacy pickle path: restricted unpickler only (blocks RCE gadgets).
     with path.open("rb") as f:
-        return pickle.load(f)
+        payload = _RestrictedBm25Unpickler(f).load()
+    if not isinstance(payload, dict) or "bm25" not in payload:
+        raise RuntimeError(f"Invalid legacy BM25 pickle at {path}")
+    return payload
