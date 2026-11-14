@@ -1,0 +1,10 @@
+# Local hybrid RAG (Python 3.11+)
+# Dense embeddings use Chroma's ONNX MiniLM (no PyTorch required).
+chromadb>=0.5.23,<1.1
+rank-bm25>=0.2.2
+PyYAML>=6.0.2
+tqdm>=4.66.0
+numpy>=1.26.0,<3
+
+# Optional: pip install 'folio[rerank]' then query --rerank
+# sentence-transformers>=3.3.0,<6

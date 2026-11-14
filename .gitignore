@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+aieng-out/
+folio-out/
+data/
+.cache/
+*.pkl
+*.tar.gz
