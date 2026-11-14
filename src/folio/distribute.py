@@ -21,7 +21,18 @@ _PACK_TOP = frozenset(_PACK_MEMBERS)
 
 def _release_url(cfg: dict[str, Any]) -> str:
     release = cfg.get("release") or {}
-    return (release.get("index_url") or "").strip()
+    url = (release.get("index_url") or "").strip()
+    if url:
+        return url
+    # Local ~/.folio/config.yaml may have an empty placeholder; fall back to bundle.
+    try:
+        from .config import default_config_text
+        import yaml
+
+        bundled = yaml.safe_load(default_config_text()) or {}
+        return ((bundled.get("release") or {}).get("index_url") or "").strip()
+    except Exception:
+        return ""
 
 
 def _require_https_url(url: str) -> str:

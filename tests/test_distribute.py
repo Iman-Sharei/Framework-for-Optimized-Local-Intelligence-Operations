@@ -48,7 +48,15 @@ def test_pack_and_bootstrap_roundtrip(
     assert (other / "config.yaml").exists()
 
 
-def test_bootstrap_without_url_errors(mini_cfg: dict):
-    mini_cfg["release"] = {"index_url": ""}
-    with pytest.raises(RuntimeError, match="No release URL"):
-        bootstrap_index(mini_cfg, force=True)
+def test_release_url_falls_back_to_bundled_when_empty():
+    from folio.distribute import _release_url
+
+    assert _release_url({"release": {"index_url": ""}}).startswith("https://")
+    assert "folio-index.tar.gz" in _release_url({"release": {"index_url": ""}})
+    custom = "https://example.com/pack.tar.gz"
+    assert _release_url({"release": {"index_url": custom}}) == custom
+
+
+def test_bootstrap_rejects_non_https_url(mini_cfg: dict):
+    with pytest.raises(RuntimeError, match="non-https"):
+        bootstrap_index(mini_cfg, url="file:///tmp/x.tar.gz", force=True)

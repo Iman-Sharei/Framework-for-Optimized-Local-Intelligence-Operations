@@ -114,8 +114,8 @@ One-time setup (API token **or** Trusted Publishing):
 After Trusted Publishing is configured, a version tag is enough:
 
 ```bash
-git tag -a v0.3.2 -m v0.3.2
-git push origin v0.3.2
+git tag -a v0.3.3 -m v0.3.3
+git push origin v0.3.3
 ```
 
 Manual local publish (token in env):

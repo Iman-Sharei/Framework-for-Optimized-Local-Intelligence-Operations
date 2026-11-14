@@ -81,13 +81,30 @@ def get_embedding_fn(model_cache_dir: Path | None = None) -> DefaultEmbeddingFun
     return DefaultEmbeddingFunction()
 
 
-def get_collection(cfg: dict[str, Any]) -> Collection:
+def _chroma_client(chroma_dir: Path) -> chromadb.PersistentClient:
+    # Telemetry writes hit the same SQLite file; disable to keep query usable
+    # under readonly / sandboxed mounts.
+    from chromadb.config import Settings
+
+    settings = Settings(
+        anonymized_telemetry=False,
+        allow_reset=True,
+        is_persistent=True,
+        persist_directory=str(chroma_dir),
+    )
+    return chromadb.PersistentClient(path=str(chroma_dir), settings=settings)
+
+
+def get_collection(cfg: dict[str, Any], *, create: bool = True) -> Collection:
     cache = Path(cfg["paths"]["model_cache_dir"])
     _ensure_local_chroma_cache(cache)
-    client = chromadb.PersistentClient(path=str(cfg["paths"]["chroma_dir"]))
+    client = _chroma_client(Path(cfg["paths"]["chroma_dir"]))
     emb = get_embedding_fn(cache)
+    name = cfg["collection"]["name"]
+    if not create:
+        return client.get_collection(name=name, embedding_function=emb)
     return client.get_or_create_collection(
-        name=cfg["collection"]["name"],
+        name=name,
         embedding_function=emb,
         metadata={"hnsw:space": "cosine"},
     )
@@ -96,13 +113,13 @@ def get_collection(cfg: dict[str, Any]) -> Collection:
 def reset_collection(cfg: dict[str, Any]) -> Collection:
     cache = Path(cfg["paths"]["model_cache_dir"])
     _ensure_local_chroma_cache(cache)
-    client = chromadb.PersistentClient(path=str(cfg["paths"]["chroma_dir"]))
+    client = _chroma_client(Path(cfg["paths"]["chroma_dir"]))
     name = cfg["collection"]["name"]
     try:
         client.delete_collection(name)
     except Exception:
         pass
-    return get_collection(cfg)
+    return get_collection(cfg, create=True)
 
 
 def upsert_chunks(collection: Collection, chunks: list[Chunk], batch_size: int = 64) -> int:
@@ -150,6 +167,7 @@ def save_bm25(path: Path, bm25: BM25Okapi, ids: list[str], chunks: list[Chunk]) 
 
 def load_bm25(path: Path) -> dict[str, Any]:
     json_path = _bm25_json_path(path)
+    pkl_path = path if path.suffix == ".pkl" else path.with_suffix(".pkl")
 
     if json_path.exists():
         data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -160,12 +178,28 @@ def load_bm25(path: Path) -> dict[str, Any]:
         bm25 = BM25Okapi(tokenized) if tokenized else BM25Okapi([["_"]])
         return {"bm25": bm25, "ids": ids, "texts": texts, "metadatas": metas}
 
-    if not path.exists():
-        raise FileNotFoundError(path)
+    if pkl_path.exists():
+        # Legacy pickle: restricted unpickler only (blocks RCE gadgets).
+        with pkl_path.open("rb") as f:
+            payload = _RestrictedBm25Unpickler(f).load()
+        if not isinstance(payload, dict) or "bm25" not in payload:
+            raise RuntimeError(f"Invalid legacy BM25 pickle at {pkl_path}")
+        # One-shot migrate to JSON so status/query stay consistent.
+        try:
+            texts = list(payload.get("texts") or [])
+            ids = list(payload.get("ids") or [])
+            metas = list(payload.get("metadatas") or [])
+            if texts and ids and len(texts) == len(ids):
+                json_path.write_text(
+                    json.dumps(
+                        {"ids": ids, "texts": texts, "metadatas": metas},
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                pkl_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return payload
 
-    # Legacy pickle path: restricted unpickler only (blocks RCE gadgets).
-    with path.open("rb") as f:
-        payload = _RestrictedBm25Unpickler(f).load()
-    if not isinstance(payload, dict) or "bm25" not in payload:
-        raise RuntimeError(f"Invalid legacy BM25 pickle at {path}")
-    return payload
+    raise FileNotFoundError(json_path if path.suffix == ".json" else path)

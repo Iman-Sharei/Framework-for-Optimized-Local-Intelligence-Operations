@@ -32,7 +32,8 @@ def rrf_fuse(
 
 
 def _dense_search(cfg: dict[str, Any], query: str, k: int) -> list[tuple[str, str, dict, float]]:
-    collection = get_collection(cfg)
+    # Query path must not create/write collections (sandbox / readonly chroma).
+    collection = get_collection(cfg, create=False)
     result = collection.query(
         query_texts=[query],
         n_results=min(k, max(collection.count(), 1)),
