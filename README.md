@@ -114,8 +114,8 @@ One-time setup (API token **or** Trusted Publishing):
 After Trusted Publishing is configured, a version tag is enough:
 
 ```bash
-git tag -a v0.3.1 -m v0.3.1
-git push origin v0.3.1
+git tag -a v0.3.2 -m v0.3.2
+git push origin v0.3.2
 ```
 
 Manual local publish (token in env):
@@ -131,5 +131,5 @@ UV_PUBLISH_TOKEN=pypi-... uv publish
 folio build
 folio pack                 # → dist/folio-index-YYYY.MM.DD.tar.gz
 # upload as GitHub Release asset, then set in config:
-# release.index_url: https://github.com/<you>/folio/releases/latest/download/folio-index.tar.gz
+# release.index_url: https://github.com/Iman-Sharei/folio/releases/latest/download/folio-index.tar.gz
 ```
