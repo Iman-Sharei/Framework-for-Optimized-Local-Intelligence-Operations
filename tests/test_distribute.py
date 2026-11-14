@@ -44,7 +44,7 @@ def test_pack_and_bootstrap_roundtrip(
 
     assert (other / "manifest.json").exists()
     assert (other / "chroma").exists()
-    assert (other / "bm25" / "index.json").exists() or (other / "bm25" / "index.pkl").exists()
+    assert (other / "bm25" / "index.json").exists()
     assert (other / "config.yaml").exists()
 
 

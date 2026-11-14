@@ -51,7 +51,7 @@ release:
 paths:
   sources_dir: data/sources
   chroma_dir: data/chroma
-  bm25_path: data/bm25/index.pkl
+  bm25_path: data/bm25/index.json
   manifest_path: data/manifest.json
 
 chunking:

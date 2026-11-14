@@ -4,18 +4,6 @@ Local hybrid RAG over curated **AI engineering / MLOps / AI infra** markdown cur
 (graphify-style CLI). Assistants query a **shared machine index** instead of stuffing
 GitHub repos into chat — lower token use, grounded citations.
 
-| Source | Path |
-|--------|------|
-| [02-senior-ai-engineer-study-path](https://github.com/RavSinghChandan/02-senior-ai-engineer-study-path) | `revision-1/` |
-| [ai-infra-senior-engineer-learning](https://github.com/ai-infra-curriculum/ai-infra-senior-engineer-learning) | `lessons/` |
-| [agentic-ai-developer-learning](https://github.com/ai-engineering-curriculum/agentic-ai-developer-learning) | `lessons/` |
-| [agentic-ai-engineer-learning](https://github.com/ai-engineering-curriculum/agentic-ai-engineer-learning) | `lessons/` |
-| [senior-agentic-ai-engineer-learning](https://github.com/ai-engineering-curriculum/senior-agentic-ai-engineer-learning) | `lessons/` |
-| [applied-ai-engineer-learning](https://github.com/ai-engineering-curriculum/applied-ai-engineer-learning) | `lessons/` |
-| [ai-eval-engineer-learning](https://github.com/ai-engineering-curriculum/ai-eval-engineer-learning) | `lessons/` |
-| [agentic-systems-architect-learning](https://github.com/ai-engineering-curriculum/agentic-systems-architect-learning) | `lessons/` |
-| [mlops-zoomcamp](https://github.com/DataTalksClub/mlops-zoomcamp) | repo MD modules |
-
 ## Install (once on this machine)
 
 PyPI distribution name is **`folio-cli`** (plain `folio` is taken). The CLI command is still **`folio`**.

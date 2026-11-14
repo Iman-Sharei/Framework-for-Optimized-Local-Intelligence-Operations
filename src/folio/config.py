@@ -72,7 +72,7 @@ def load_config(
     paths = cfg.setdefault("paths", {})
     paths["sources_dir"] = root / "sources"
     paths["chroma_dir"] = root / "chroma"
-    paths["bm25_path"] = root / "bm25" / "index.pkl"
+    paths["bm25_path"] = root / "bm25" / "index.json"
     paths["manifest_path"] = root / "manifest.json"
     paths["model_cache_dir"] = root / "model-cache"
     paths["out_dir"] = root

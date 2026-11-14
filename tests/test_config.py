@@ -28,6 +28,6 @@ def test_load_config_materializes_paths(folio_home: Path):
     cfg = load_config(out_dir=folio_home)
     assert cfg["paths"]["out_dir"] == folio_home.resolve()
     assert cfg["paths"]["chroma_dir"] == folio_home / "chroma"
-    assert cfg["paths"]["bm25_path"] == folio_home / "bm25" / "index.pkl"
+    assert cfg["paths"]["bm25_path"] == folio_home / "bm25" / "index.json"
     assert cfg["paths"]["manifest_path"] == folio_home / "manifest.json"
     assert isinstance(cfg["sources"], list) and len(cfg["sources"]) >= 2
