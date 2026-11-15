@@ -1,1 +1,1 @@
-"""Packaged static assets (config, skill templates)."""
+"""Packaged static assets (config and skill templates)."""
