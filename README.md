@@ -49,6 +49,8 @@ folio query "when should a retrieval step widen the candidate set?"
 | `codex` | `.codex/skills/folio/SKILL.md` |
 | `agents` | `.agents/skills/folio/SKILL.md`, `AGENTS.md` |
 
+This repo already includes the Cursor, Claude, and Agents files above. In another project, run `folio install --project` (and `--platform claude` when you need Claude).
+
 Run it once for each assistant you use. For Cursor, the rule file is always written in the project directory. `SKILL.md` and `AGENTS.md` are added only with `--project`. For Claude, Codex, and `agents`, omitting `--project` writes those files under your home directory instead of the repo.
 
 ```bash
