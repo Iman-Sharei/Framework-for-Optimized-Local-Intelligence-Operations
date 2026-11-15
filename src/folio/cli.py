@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import ensure_data_dirs, load_config, resolve_out_dir, write_default_config
+from .add_doc import add_local_document
 from .distribute import bootstrap_index, migrate_legacy_index, pack_index, update_index
 from .ingest import ingest
 from .install import install as install_skill
@@ -180,6 +181,12 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_add(args: argparse.Namespace) -> int:
+    cfg = _cfg(args)
+    add_local_document(cfg, Path(args.path), source_id=args.source_id)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="folio",
@@ -289,6 +296,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also delete a leftover ./folio-out/ in the project (index normally lives in ~/.folio)",
     )
     p_uninstall.set_defaults(func=cmd_uninstall)
+
+    p_add = sub.add_parser(
+        "add",
+        help="Index a local PDF/markdown/text file into the shared ~/.folio hybrid index",
+    )
+    _add_out_arg(p_add)
+    p_add.add_argument("path", type=Path, help="Path to .pdf / .md / .txt")
+    p_add.add_argument(
+        "--source-id",
+        default=None,
+        help="Optional source id (default: slug of the filename)",
+    )
+    p_add.set_defaults(func=cmd_add)
 
     return parser
 

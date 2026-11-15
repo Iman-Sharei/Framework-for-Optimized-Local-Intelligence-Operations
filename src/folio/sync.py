@@ -97,14 +97,28 @@ def sync_sources(cfg: dict[str, Any], force: bool = False) -> list[Path]:
 
 
 def iter_markdown(cfg: dict[str, Any]) -> list[tuple[str, Path]]:
-    """Return (source_id, absolute md path) for every markdown file under synced roots."""
+    """Return (source_id, absolute md path) for every markdown file under synced roots.
+
+    Also includes any extra directories under sources/ (e.g. local PDFs via ``folio add``).
+    """
     sources_dir: Path = cfg["paths"]["sources_dir"]
     out: list[tuple[str, Path]] = []
+    seen_ids: set[str] = set()
     for src in cfg["sources"]:
-        root = _content_root(sources_dir / src["id"], src["sparse_path"])
+        sid = src["id"]
+        seen_ids.add(sid)
+        root = _content_root(sources_dir / sid, src["sparse_path"])
         if not root.exists():
             continue
         for path in sorted(root.rglob("*.md")):
             if path.is_file() and ".git" not in path.parts:
-                out.append((src["id"], path))
+                out.append((sid, path))
+
+    if sources_dir.exists():
+        for child in sorted(sources_dir.iterdir()):
+            if not child.is_dir() or child.name in seen_ids or child.name.startswith("."):
+                continue
+            for path in sorted(child.rglob("*.md")):
+                if path.is_file() and ".git" not in path.parts:
+                    out.append((child.name, path))
     return out
