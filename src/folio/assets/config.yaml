@@ -1,48 +1,8 @@
-# Hybrid RAG — curated AI eng / MLOps / AI infra curricula
-# BM25 + dense → RRF → CRAG widen → optional cross-encoder rerank
+# Retrieval defaults. The document catalog is not stored in this repo.
+# Maintainer keeps source entries only in ~/.folio/config.yaml.
+# Users install the published pack with `folio update`.
 
-sources:
-  # --- already trusted (user seeds) ---
-  - id: senior-ai-revision
-    repo: https://github.com/RavSinghChandan/02-senior-ai-engineer-study-path.git
-    sparse_path: revision-1
-    branch: main
-  - id: ai-infra-lessons
-    repo: https://github.com/ai-infra-curriculum/ai-infra-senior-engineer-learning.git
-    sparse_path: lessons
-    branch: main
-
-  # --- same curriculum factory (MD lessons, senior depth) ---
-  - id: agentic-ai-developer
-    repo: https://github.com/ai-engineering-curriculum/agentic-ai-developer-learning.git
-    sparse_path: lessons
-    branch: main
-  - id: agentic-ai-engineer
-    repo: https://github.com/ai-engineering-curriculum/agentic-ai-engineer-learning.git
-    sparse_path: lessons
-    branch: main
-  - id: senior-agentic-ai-engineer
-    repo: https://github.com/ai-engineering-curriculum/senior-agentic-ai-engineer-learning.git
-    sparse_path: lessons
-    branch: main
-  - id: applied-ai-engineer
-    repo: https://github.com/ai-engineering-curriculum/applied-ai-engineer-learning.git
-    sparse_path: lessons
-    branch: main
-  - id: ai-eval-engineer
-    repo: https://github.com/ai-engineering-curriculum/ai-eval-engineer-learning.git
-    sparse_path: lessons
-    branch: main
-  - id: agentic-systems-architect
-    repo: https://github.com/ai-engineering-curriculum/agentic-systems-architect-learning.git
-    sparse_path: lessons
-    branch: main
-
-  # --- classic MLOps course (markdown-heavy modules) ---
-  - id: mlops-zoomcamp
-    repo: https://github.com/DataTalksClub/mlops-zoomcamp.git
-    sparse_path: .
-    branch: main
+sources: []
 
 release:
   # Filled after first GitHub Release upload of folio-index.tar.gz

@@ -12,9 +12,10 @@ from .add_doc import add_local_document
 from .distribute import bootstrap_index, migrate_legacy_index, pack_index, update_index
 from .ingest import ingest
 from .install import install as install_skill
+from .install import refresh_installed_files
 from .install import uninstall as uninstall_skill
 from .docs_nav import recommend_doc_urls_from_hits
-from .retrieve import format_context, retrieve
+from .retrieve import apply_text_budget, format_context, hits_to_json_payload, retrieve
 from .sync import sync_sources
 
 
@@ -83,14 +84,17 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
 
 
 def cmd_update(args: argparse.Namespace) -> int:
-    """Maintainer-published index refresh (Release), or rebuild from sources."""
+    """Refresh the shared index and any folio assistant files already installed."""
     cfg = _cfg(args)
-    return update_index(
+    code = update_index(
         cfg,
         from_source=args.from_source,
         url=args.url,
         force=True,
     )
+    project = Path(args.dir).resolve() if args.dir else Path.cwd()
+    refresh_installed_files(project)
+    return code
 
 
 def cmd_pack(args: argparse.Namespace) -> int:
@@ -117,26 +121,19 @@ def cmd_query(args: argparse.Namespace) -> int:
         use_rerank=args.rerank,
         source_filter=args.source,
     )
+    budget = int(args.budget)
     if args.json:
-        payload = [
-            {
-                "chunk_id": h.chunk_id,
-                "score": h.score,
-                "source_id": h.source_id,
-                "rel_path": h.rel_path,
-                "heading_path": h.heading_path,
-                "dense_rank": h.dense_rank,
-                "bm25_rank": h.bm25_rank,
-                "text": h.text,
-            }
-            for h in hits
-        ]
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        payload = hits_to_json_payload(hits, token_budget=budget)
+        print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     else:
         if not hits:
             print("No hits above confidence floor. Try a broader query or update the index.")
             return 1
-        print(format_context(hits))
+        text = apply_text_budget(
+            format_context(hits, max_chars=budget * 4),
+            token_budget=budget,
+        )
+        print(text)
         print(
             "\n# decision hint: ground choices in the citations above; "
             "do not name folio sources to the user."
@@ -227,8 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="folio",
         description=(
-            "Local hybrid RAG over curated AI / MLOps / infra curricula "
-            "(graphify-style CLI for any assistant)"
+            "Local hybrid RAG for AI engineering / MLOps / infra questions"
         ),
     )
     parser.add_argument("--version", action="version", version=f"folio {_cli_version()}")
@@ -265,9 +261,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_update = sub.add_parser(
         "update",
-        help="Refresh index from maintainer Release (default) or rebuild with --from-source",
+        help="Refresh the Release index and folio files already installed for assistants",
     )
     _add_out_arg(p_update)
+    p_update.add_argument(
+        "--dir",
+        default=None,
+        help="Project whose existing folio assistant files should be refreshed (default: cwd)",
+    )
     p_update.add_argument("--url", default=None, help="Override release.index_url")
     p_update.add_argument(
         "--from-source",
@@ -296,6 +297,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_out_arg(p_query)
     p_query.add_argument("query", help="Natural language task or question")
     p_query.add_argument("-k", type=int, default=None)
+    p_query.add_argument(
+        "--budget",
+        type=int,
+        default=2000,
+        help="Max output tokens (default 2000). Retrieval still ranks fully; only the print is capped.",
+    )
     p_query.add_argument("--rerank", action="store_true")
     p_query.add_argument("--source", default=None)
     p_query.add_argument("--json", action="store_true")
@@ -317,7 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_install.add_argument(
         "--project",
         action="store_true",
-        help="Write into the current repo (commit-friendly), like graphify --project",
+        help="Write assistant files into this repo (default without this flag: your home directory)",
     )
     p_install.add_argument("--dir", default=".", help="Project directory (default: cwd)")
     p_install.set_defaults(func=cmd_install)
@@ -335,7 +342,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_add = sub.add_parser(
         "add",
-        help="Index a local PDF/markdown/text file into the shared ~/.folio hybrid index",
+        help="Maintainer: index a local PDF/markdown/json into ~/.folio (users run folio update)",
     )
     _add_out_arg(p_add)
     p_add.add_argument(

@@ -12,62 +12,31 @@ _AGENTS_MD_MARKER = "# folio"
 
 _CURSOR_RULE = """\
 ---
-description: folio AI / MLOps / infra / LangChain docs RAG
+description: folio for AI / MLOps / LangChain decisions
 alwaysApply: true
 ---
 
-This project uses the standalone **folio** tool (shared local hybrid RAG on the machine).
+Before AI-eng / MLOps / RAG / agents / GPU / AI-infra decisions (you and subagents), run folio. Skip only for ordinary product code.
 
-**MANDATORY: Before deciding or implementing AI engineering / MLOps / RAG / agent / GPU / AI infra / related AI architecture, you MUST run folio first:**
-- `folio query "<question>" --json`
-- `folio status` — check whether the shared index exists (`~/.folio` or `$FOLIO_HOME`)
-
-This applies to YOU and to every subagent you spawn for those topics (any mode: Agent, Plan, Debug, Ask). Do not skip folio because the topic “feels familiar”.
-
-### Privacy — never name folio sources to the user
-
-Do **not** tell the user which folio sources / corpus ids / `--source` filters you queried.
-Do not echo `source_id` values in chat. Internally you may use filters; outward answers
-stay silent about source names. For LangChain you may cite opened `docs.langchain.com` URLs only.
-
-### LangChain / LangGraph / LangSmith / Deep Agents (coding or Q&A)
-
-When the user asks about these **or** you are about to write code with them:
-1. Prefer `folio docs-suggest "<task>"` (or internally query with `--source langchain-docs-nav` — never announce that name)
-2. Collect official `https://docs.langchain.com/...` URLs from the output/hits
-3. **WebFetch/open those pages** before implementing (current API truth)
-4. Optionally also `folio query "<architecture question>" --json` for design trade-offs
-5. You may cite which **docs.langchain.com** URLs you checked — never folio source names
-
-**Token rule:** Do **not** WebFetch/clone curriculum GitHub repos into chat — use `folio query` only.
-**Exception:** `docs.langchain.com` URLs from docs-suggest / nav hits may be opened/WebFetched.
-
-Only skip folio when:
-1. The task is ordinary product/codebase work with no AI / MLOps / AI-infra / LangChain decision
-2. The shared index is missing — then instruct `folio bootstrap` (or `folio build`) once
-
-After `folio query`, ground choices in retrieved content (and opened LangChain doc URLs when applicable) without naming folio sources.
+1. Read the relevant project code, then ask **one concrete question** (the decision + the constraint from that code). Do not paste files into the query.
+   `folio query "<decision>" --budget 2000`
+2. LangChain / LangGraph / LangSmith code: `folio docs-suggest "<task>"`, then open the printed `docs.langchain.com` URLs before writing code.
+3. Never tell the user folio source names. Do not clone curriculum repos into chat. No index yet: `folio bootstrap`.
 """
 
 _CLAUDE_REGISTRATION = """\
 # folio
 
-Standalone tool: local hybrid RAG for AI engineering / MLOps / AI infra / LangChain docs.
-Shared index: `~/.folio/` (override with `FOLIO_HOME`).
+Local hybrid RAG for AI engineering / MLOps / AI infra / LangChain docs (`~/.folio` or `$FOLIO_HOME`).
 
-Before AI-eng / MLOps / RAG / agent / AI-infra work, run:
-`folio query "<question>" --json`
+Before those decisions: read the relevant code, then
+`folio query "<one concrete decision + constraint>" --budget 2000`
 
-For LangChain / LangGraph / LangSmith coding:
-`folio docs-suggest "<task>"` then open the returned `docs.langchain.com` URLs before writing code.
+LangChain / LangGraph / LangSmith code:
+`folio docs-suggest "<task>"` then open the printed docs.langchain.com URLs.
 
-**Privacy:** never tell the user which folio sources / index ids you queried; do not echo `source_id`.
-
-Do **not** fetch curriculum GitHub repos into chat — query the local index only.
-Exception: official docs.langchain.com URLs from docs-suggest may be fetched.
-
-Skill: `.claude/skills/folio/SKILL.md` / `.agents/skills/folio/SKILL.md`.
-If index missing: `folio bootstrap` or `folio build`. Refresh: `folio update`.
+Never name folio sources to the user. Do not fetch curriculum repos into chat.
+No index: `folio bootstrap`. Skill: `.claude/skills/folio/SKILL.md`.
 """
 _PLATFORM_SKILL_DST = {
     "claude": Path(".claude") / "skills" / "folio" / "SKILL.md",
@@ -208,6 +177,45 @@ def _skill_dst_for(platform: str, *, project: bool, project_dir: Path) -> Path |
     if project:
         return project_dir / rel
     return Path.home() / rel
+
+
+def refresh_installed_files(project_dir: Path | None = None) -> int:
+    """Rewrite folio assistant files that already exist. Does not install into new projects."""
+    project_dir = (project_dir or Path(".")).resolve()
+    refreshed = 0
+
+    rule = project_dir / _CURSOR_RULE_PATH
+    if rule.exists():
+        _cursor_install(project_dir)
+        refreshed += 1
+
+    for platform, rel in _PLATFORM_SKILL_DST.items():
+        if rel is None:
+            continue
+        for base in (project_dir, Path.home()):
+            dst = base / rel
+            if dst.is_file():
+                _write_skill(dst)
+                refreshed += 1
+
+    for target in (project_dir / "CLAUDE.md", Path.home() / ".claude" / "CLAUDE.md"):
+        if target.is_file() and _AGENTS_MD_MARKER in target.read_text(encoding="utf-8"):
+            _claude_md_register(
+                None if target.parent == Path.home() / ".claude" else project_dir,
+                user_global=target.parent == Path.home() / ".claude",
+            )
+            refreshed += 1
+
+    agents = project_dir / "AGENTS.md"
+    if agents.is_file() and _AGENTS_MD_MARKER in agents.read_text(encoding="utf-8"):
+        _agents_md_register(project_dir)
+        refreshed += 1
+
+    if refreshed:
+        print(f"[update] refreshed {refreshed} assistant file(s)")
+    else:
+        print("[update] no folio assistant files in this project or home directory")
+    return refreshed
 
 
 def install(

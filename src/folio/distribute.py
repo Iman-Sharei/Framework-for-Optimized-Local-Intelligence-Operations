@@ -5,6 +5,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -143,14 +144,34 @@ def bootstrap_index(
     with tempfile.TemporaryDirectory(prefix="folio-bootstrap-") as tmp:
         tmp_path = Path(tmp) / "folio-index.tar.gz"
         print(f"[bootstrap] downloading {resolved}")
-        try:
-            urllib.request.urlretrieve(resolved, tmp_path)  # noqa: S310
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"Failed to download index: {e}") from e
+        _download(resolved, tmp_path)
         _extract_into_out(tmp_path, out)
 
     print(f"[bootstrap] ready at {out}")
     return out
+
+
+def _download(url: str, dest: Path, *, attempts: int = 4) -> None:
+    """Download a release asset. GitHub often resets a long transfer once."""
+    request = urllib.request.Request(url, headers={"User-Agent": "folio-cli"})
+    last: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response, dest.open("wb") as handle:
+                while True:
+                    chunk = response.read(1024 * 256)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+            return
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+            last = exc
+            dest.unlink(missing_ok=True)
+            if attempt == attempts:
+                break
+            print(f"[bootstrap] download interrupted ({exc}); retry {attempt + 1}/{attempts}", file=sys.stderr)
+            time.sleep(min(2 ** attempt, 8))
+    raise RuntimeError(f"Failed to download index: {last}") from last
 
 
 def _extract_into_out(archive: Path, out: Path) -> None:
@@ -201,11 +222,8 @@ def update_index(
         bootstrap_index(cfg, url=url, force=force)
         return 0
     except RuntimeError as e:
-        print(f"[update] bootstrap unavailable: {e}", file=sys.stderr)
-        print("[update] falling back to --from-source build…", file=sys.stderr)
-        sync_sources(cfg, force=False)
-        ingest(cfg, rebuild=True)
-        return 0
+        print(f"[update] could not download the published index: {e}", file=sys.stderr)
+        return 1
 
 
 def migrate_legacy_index(legacy: Path | None = None) -> Path | None:

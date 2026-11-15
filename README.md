@@ -1,132 +1,93 @@
 # folio
 
-Local hybrid RAG for **AI engineering / MLOps / AI infra** questions — plus LangChain
-docs navigation. Assistants query a **shared machine index** and get grounded citations
-instead of stuffing large docs into chat.
+Local hybrid RAG for **AI engineering / MLOps / AI infra** questions. Assistants query a
+shared index on the machine and get a short, grounded answer instead of pulling large
+docs into chat.
 
 ## Install
 
-PyPI name is **`folio-cli`** (plain `folio` is taken). The command is still **`folio`**.
+PyPI name is **`folio-cli`**. The command is **`folio`**.
 
 ```bash
 uv tool install folio-cli
 folio --help
 ```
 
-From a checkout:
-
-```bash
-cd ~/Desktop/folio
-uv sync
-uv run folio status
-# or:
-uv tool install --editable .
-```
-
-```bash
-uv tool install git+https://github.com/Iman-Sharei/folio
-```
-
 ## Index
 
-Lives in **`~/.folio/`** (override with `FOLIO_HOME`). Not inside product repos.
+The index lives in **`~/.folio/`** (override with `FOLIO_HOME`). It is not stored inside product repos.
 
 ```bash
-folio bootstrap                # prebuilt pack from Release
-# or:
-folio build                    # build the index locally (slower)
+folio bootstrap     # first download of the published pack
 folio status
 ```
 
-Refresh:
+`folio bootstrap` does nothing if `~/.folio` already has an index. To replace it:
 
 ```bash
-folio update                   # new Release pack (falls back to build)
-folio update --from-source     # force local rebuild
+folio update
 ```
 
-## Use from a project
+`folio update` downloads the latest pack and rewrites folio assistant files that are already in the current project (or in your home directory). It does not install folio into a project that never had it. Upgrade the program itself with `uv tool upgrade folio-cli`.
+
+## Use in a project
+
+folio does **not** detect which assistant you use. If you omit `--platform`, it installs for **Cursor**.
 
 ```bash
 cd /path/to/your-project
-folio install --project --platform cursor
-folio query "hybrid RAG vs RAGless" --json
+folio install --project
+folio query "when should a retrieval step widen the candidate set?"
 ```
 
-For LangChain / LangGraph coding, prefer nav first then open official docs:
+`--project` writes into the repo:
+
+| platform | files |
+|---|---|
+| `cursor` (default) | `.cursor/rules/folio.mdc`, `.agents/skills/folio/SKILL.md`, `AGENTS.md` |
+| `claude` | `.claude/skills/folio/SKILL.md`, `CLAUDE.md` |
+| `codex` | `.codex/skills/folio/SKILL.md` |
+| `agents` | `.agents/skills/folio/SKILL.md`, `AGENTS.md` |
+
+Run it once for each assistant you use. For Cursor, the rule file is always written in the project directory. `SKILL.md` and `AGENTS.md` are added only with `--project`. For Claude, Codex, and `agents`, omitting `--project` writes those files under your home directory instead of the repo.
 
 ```bash
-folio docs-suggest "LangGraph persistence checkpoint"
-# → https://docs.langchain.com/... URLs to WebFetch/open
+folio install --project --platform claude
+folio install --project --platform codex
 ```
 
-**Token rule:** do **not** pull curriculum repos into chat — use `folio query`.
-Exception: `docs.langchain.com` URLs from `docs-suggest` may be opened.
-Assistants must **not** tell the user which folio sources they queried.
-
-## Architecture
-
-```
-markdown / PDF / docs-nav → chunk → ONNX MiniLM
-                    ↓
-         ChromaDB + BM25  →  ~/.folio/
-                    ↓
-query → dense + BM25 → RRF → CRAG → citations (~1–2k tokens)
-```
+Assistants must not name folio sources in replies to you, and must not pull curriculum repos into chat. Use `folio query`.
 
 ## Commands
 
 ```bash
-folio bootstrap [--url URL] [--archive FILE] [--force]
-folio build
-folio update [--from-source]
-folio pack [--dest PATH]
-folio add /path/to/file.pdf|.md|.txt|.json
-folio query "<q>" [--json] [-k N] [--source ID] [--rerank]
-folio docs-suggest "<LangChain/LangGraph task>" [-k N] [--limit N]
+folio bootstrap
+folio update
 folio status
-folio install --project --platform cursor|claude|codex|agents
-folio uninstall --project [--purge]
+folio query "<question>" [--json] [-k N] [--budget N]
+folio install --project [--platform cursor|claude|codex|agents]
+folio uninstall --project [--platform cursor|claude|codex|agents]
 ```
+
+`folio query` still searches the full index. `--budget` only caps what is printed (default 2000 tokens).
 
 ## Tests
 
 ```bash
 uv sync
 uv run pytest -q
-uv run pytest -q -m "not integration"
-uv run pytest -q -m integration
 ```
 
-CI runs on Python 3.11/3.12. Tag `vX.Y.Z` to publish the index pack to the GitHub Release
-and `folio-cli` to PyPI (Trusted Publishing; see below).
+## Maintainer
 
-## Maintainer: publish `folio-cli` to PyPI
-
-Trusted Publishing (preferred — no long-lived token):
-
-1. GitHub Environment **`pypi`** on `Iman-Sharei/folio` (used by `.github/workflows/publish-pypi.yml`)
-2. On PyPI, add a GitHub Trusted Publisher for **folio-cli**:
-   [folio-cli → Publishing](https://pypi.org/manage/project/folio-cli/settings/publishing/)
-   - Owner `Iman-Sharei` · Repository `folio` · Workflow `publish-pypi.yml` · Environment `pypi`
-3. Tag and push — Actions builds + `uv publish --trusted-publishing always`
+Users do not add documents. `folio add` is for publishing a new pack.
 
 ```bash
-./scripts/publish-pypi-wizard.sh
-git tag -a v0.3.5 -m v0.3.5 && git push origin v0.3.5
+folio add /path/to/file.pdf|.md|.txt|.json
+folio pack
+cp "$(ls -t dist/folio-index-*.tar.gz | head -1)" dist/folio-index.tar.gz
+TAG=$(gh release view --repo Iman-Sharei/folio --json tagName -q .tagName)
+gh release upload "$TAG" dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
 ```
 
-Manual local publish:
-
-```bash
-uv build
-UV_PUBLISH_TOKEN=pypi-... uv publish
-```
-
-## Maintainer: publish index for `folio bootstrap`
-
-```bash
-folio build
-folio pack                 # → dist/folio-index-YYYY.MM.DD.tar.gz
-# upload as GitHub Release asset; set release.index_url in config
-```
+Publish the program by tagging `vX.Y.Z`. That uses the GitHub Environment `pypi` and a PyPI Trusted Publisher for `folio-cli`.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -165,7 +166,52 @@ def _cross_encoder_rerank(
     return rescored
 
 
-def format_context(hits: list[Hit], *, max_chars: int = 12000) -> str:
+def chars_for_token_budget(token_budget: int) -> int:
+    """Approx chars for a token cap (same 4 chars/token heuristic as compact CLIs)."""
+    return max(int(token_budget), 1) * 4
+
+
+def apply_text_budget(text: str, *, token_budget: int) -> str:
+    limit = chars_for_token_budget(token_budget)
+    if len(text) <= limit:
+        return text
+    note = f"\n… (truncated to ~{token_budget} tokens; raise --budget for more)\n"
+    room = max(limit - len(note), 0)
+    return text[:room] + note
+
+
+def hits_to_json_payload(hits: list[Hit], *, token_budget: int) -> list[dict[str, Any]]:
+    """Compact hit list that fits the token budget (accuracy stays in retrieval; output is capped)."""
+    limit = chars_for_token_budget(token_budget)
+    payload: list[dict[str, Any]] = []
+    used = 2  # []
+    for h in hits:
+        overhead = 160
+        room = limit - used - overhead
+        if room < 80:
+            break
+        excerpt = h.text if len(h.text) <= room else h.text[:room]
+        item = {
+            "chunk_id": h.chunk_id,
+            "score": round(h.score, 4),
+            "heading_path": h.heading_path,
+            "rel_path": h.rel_path,
+            "source_id": h.source_id,
+            "text": excerpt,
+        }
+        blob = json_len(item)
+        if used + blob > limit and payload:
+            break
+        payload.append(item)
+        used += blob
+    return payload
+
+
+def json_len(item: dict[str, Any]) -> int:
+    return len(json.dumps(item, ensure_ascii=False))
+
+
+def format_context(hits: list[Hit], *, max_chars: int = 8000) -> str:
     parts: list[str] = []
     used = 0
     for i, h in enumerate(hits, start=1):

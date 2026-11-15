@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from folio.retrieve import Hit, format_context, rrf_fuse
+from folio.retrieve import Hit, format_context, hits_to_json_payload, rrf_fuse
 
 
 def test_rrf_prefers_docs_ranked_high_in_both_lists():
@@ -51,3 +51,22 @@ def test_format_context_includes_citations_and_respects_budget():
     assert "[1]" in tiny
     # second block dropped when budget is tight
     assert "[2]" not in tiny
+
+
+def test_json_payload_respects_token_budget():
+    hits = [
+        Hit(
+            chunk_id=str(i),
+            text=("word " * 400),
+            score=1.0 - i * 0.01,
+            source_id=f"s{i}",
+            rel_path=f"{i}.md",
+            heading_path="H",
+        )
+        for i in range(8)
+    ]
+    payload = hits_to_json_payload(hits, token_budget=2000)
+    assert payload
+    assert len(payload) < 8
+    blob = __import__("json").dumps(payload, ensure_ascii=False)
+    assert len(blob) <= 2000 * 4 + 50

@@ -1,92 +1,32 @@
 ---
 name: folio
-description: "Use for any AI engineering / MLOps / RAG / agent / GPU / AI infra / LangChain / LangGraph / LangSmith decision. Queries local hybrid RAG (~/.folio). For LangChain ecosystem coding, retrieve docs-nav URLs then open those official pages."
+description: "Use for AI engineering / MLOps / RAG / agent / GPU / AI infra / LangChain decisions. One bounded folio query (~2000 tokens), then answer. For LangChain code, docs-suggest URLs then open those pages."
 ---
 
 # /folio
 
-Local hybrid RAG for AI-engineer / MLOps / infra topics and LangChain docs navigation.
-Index: `~/.folio/` (or `$FOLIO_HOME`).
+Shared index: `~/.folio/` (or `$FOLIO_HOME`). Output is capped (`--budget`, default 2000 tokens) so a query stays small. Retrieval still ranks the full index; only what is printed is capped.
 
-## Privacy (mandatory)
+## How to ask (accuracy)
 
-When you run folio for the user:
-- **Never tell the user which folio sources / index ids you queried** (do not name
-  `source_id` values, corpus labels, or `--source` filters in chat).
-- Do not say things like “I’m searching X handbook” or “querying langchain-docs-nav”.
-- Internally you may use filters and JSON fields; **outward answers stay silent about
-  source names**. Ground answers in substance; for LangChain, you may cite opened
-  `docs.langchain.com` URLs only.
+1. Read the relevant project code first (the function, config, or error — not the whole repo).
+2. Turn the user request + that code into **one concrete question**: the decision and the constraint (stack, latency, data shape, API you are calling).
+3. Run `folio query "<that question>" --budget 2000`.
+4. If the hits are thin, run **once** more with a sharper question or `-k 8`. Do not loop.
+5. Answer from the hits. Do not paste the raw folio output to the user.
+6. Never name folio sources / `source_id` values in the user-facing reply.
 
-## Usage
+## LangChain / LangGraph / LangSmith
 
-```
-/folio query "<question>" --json
-/folio docs-suggest "<LangChain/LangGraph task>"
-/folio add /path/to/file.pdf|.md|.json
-/folio status
-/folio install --project --platform cursor
-```
+When writing or changing that code:
 
-## What folio is for
+1. `folio docs-suggest "<task>"` — this prints only official URLs (tiny).
+2. Open those `https://docs.langchain.com/...` pages before implementing.
+3. Add `folio query` only when you also need an architecture trade-off, still with `--budget 2000`.
 
-**When to query:** RAG, embeddings, vector DBs, agents, LangChain / LangGraph / LangSmith /
-Deep Agents, training/GPU, model optimization, feature stores, GitOps, SRE/SLO for ML,
-AI infra, or related senior AI trade-offs.
+## Do not
 
-**When not to:** ordinary product / codebase exploration (Read / Grep / project tools).
-
-## LangChain / LangGraph / LangSmith (mandatory)
-
-If the user asks about these frameworks **or** you are about to write/modify code that
-uses them (chains, graphs, tools, memory, LangSmith, Deep Agents, etc.):
-
-1. Prefer:
-   ```bash
-   folio docs-suggest "<task keywords> LangChain LangGraph"
-   ```
-   (or internally `folio query … --source langchain-docs-nav -k 12 --json` — do **not**
-   announce that filter name to the user)
-2. Collect official `https://docs.langchain.com/...` pages from the output.
-3. **Open/WebFetch those doc pages** before implementing.
-4. Optionally also `folio query "<architecture question>" --json` for design trade-offs.
-5. You may tell the user which **docs.langchain.com** URLs you checked — never folio
-   source names.
-
-If docs-suggest / nav returns nothing useful, broaden the query once; if still empty,
-ask to re-index with `folio add /path/to/sidebars.json` (no need to name internal ids).
-
-## Token rule (strict)
-
-Do **not** WebFetch/clone curriculum GitHub repos into chat — use `folio query` only.
-
-**Exception:** official `https://docs.langchain.com/...` URLs from docs-suggest / nav hits
-**may** be opened/WebFetched.
-
-If the shared index is missing: instruct `folio bootstrap` (or `folio build`) once.
-
-## What You Must Do When Invoked
-
-### Fast path — index exists
-
-```bash
-folio query "<question>" --json
-```
-
-Ground architecture answers in retrieved content. Do not echo `source_id` to the user.
-For LangChain coding tasks, follow the LangChain section above (nav → open docs).
-
-### No index yet
-
-```bash
-folio bootstrap   # or: folio build
-folio query "<question>" --json
-```
-
-## Rules for answers
-
-1. Prefer patterns that appear in retrieved chunks; do **not** name folio sources.
-2. When retrieved material conflicts, state the trade-off and pick for *this* constraint.
-3. Never skip retrieval for “quick” AI architecture or LangChain API guesses when the index is present.
-4. For LangChain ecosystem work: nav → check listed docs URLs → then code.
-5. Never disclose folio source / corpus names in user-facing replies.
+- Do not WebFetch or clone curriculum repos into chat.
+- Do not send file dumps, logs, or the whole diff as the query string.
+- Do not raise `--budget` above 2000 unless the first answer is clearly cut off mid-point.
+- If the index is missing: `folio bootstrap` once, then query.
