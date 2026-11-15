@@ -142,18 +142,22 @@ def build_bm25(chunks: list[Chunk]) -> tuple[BM25Okapi, list[str], list[Chunk]]:
     return BM25Okapi(tokenized), [c.chunk_id for c in chunks], chunks
 
 
-def _bm25_json_path(path: Path) -> Path:
-    """Prefer index.json alongside (or instead of) legacy index.pkl."""
+def bm25_index_path(path: Path) -> Path:
+    """Canonical on-disk BM25 path (JSON). Accepts legacy ``*.pkl`` configs."""
     if path.suffix == ".json":
         return path
     return path.with_suffix(".json")
 
 
-def save_bm25(path: Path, bm25: BM25Okapi, ids: list[str], chunks: list[Chunk]) -> None:
+def _bm25_json_path(path: Path) -> Path:
+    return bm25_index_path(path)
+
+
+def save_bm25(path: Path, bm25: BM25Okapi, ids: list[str], chunks: list[Chunk]) -> Path:
     """Persist BM25 corpus as JSON and rebuild the index on load (no pickle)."""
     del bm25  # rebuilt from texts on load
-    path.parent.mkdir(parents=True, exist_ok=True)
-    json_path = _bm25_json_path(path)
+    json_path = bm25_index_path(path)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "ids": ids,
         "texts": [c.text for c in chunks],
@@ -161,12 +165,14 @@ def save_bm25(path: Path, bm25: BM25Okapi, ids: list[str], chunks: list[Chunk]) 
     }
     json_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     # Remove legacy pickle so packs don't ship an RCE surface.
-    if path.suffix == ".pkl" and path.exists():
-        path.unlink()
+    pkl_path = path if path.suffix == ".pkl" else path.with_suffix(".pkl")
+    if pkl_path.exists():
+        pkl_path.unlink()
+    return json_path
 
 
 def load_bm25(path: Path) -> dict[str, Any]:
-    json_path = _bm25_json_path(path)
+    json_path = bm25_index_path(path)
     pkl_path = path if path.suffix == ".pkl" else path.with_suffix(".pkl")
 
     if json_path.exists():

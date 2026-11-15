@@ -6,6 +6,7 @@ import pytest
 
 from folio.ingest import ingest
 from folio.retrieve import retrieve
+from folio.store import bm25_index_path
 from folio.sync import sync_sources
 
 
@@ -29,7 +30,8 @@ def test_ingest_and_hybrid_retrieve_returns_relevant_citations(
     assert "index_version" in manifest
     assert "cli_version" in manifest
     assert mini_cfg["paths"]["manifest_path"].exists()
-    assert mini_cfg["paths"]["bm25_path"].exists()
+    # Ingest writes JSON even if a legacy config still named the path *.pkl.
+    assert bm25_index_path(mini_cfg["paths"]["bm25_path"]).exists()
 
     hits = retrieve(mini_cfg, "hybrid RAG BM25 dense RRF fusion", final_k=3)
     assert hits, "expected at least one hit for a curriculum-aligned query"

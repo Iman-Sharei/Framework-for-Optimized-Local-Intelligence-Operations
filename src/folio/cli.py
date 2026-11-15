@@ -16,6 +16,7 @@ from .install import refresh_installed_files
 from .install import uninstall as uninstall_skill
 from .docs_nav import recommend_doc_urls_from_hits
 from .retrieve import apply_text_budget, format_context, hits_to_json_payload, retrieve
+from .store import bm25_index_path
 from .sync import sync_sources
 
 
@@ -149,7 +150,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"cli:      folio {_cli_version()}")
     print(f"out:      {out}")
     print(f"chroma:   {cfg['paths']['chroma_dir']} exists={Path(cfg['paths']['chroma_dir']).exists()}")
-    print(f"bm25:     {cfg['paths']['bm25_path']} exists={Path(cfg['paths']['bm25_path']).exists()}")
+    bm25 = bm25_index_path(Path(cfg["paths"]["bm25_path"]))
+    print(f"bm25:     {bm25} exists={bm25.exists()}")
     print(f"manifest: {manifest} exists={manifest.exists()}")
     if manifest.exists():
         data = json.loads(Path(manifest).read_text(encoding="utf-8"))
