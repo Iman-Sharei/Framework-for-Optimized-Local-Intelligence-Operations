@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # PyPI distribution name (plain "folio" is taken by an unrelated static-site tool).
 # Import package + CLI command remain `folio`.
 name = "folio-cli"
-version = "0.3.4"
+version = "0.3.5"
 description = "Local hybrid RAG over curated AI / MLOps / infra curricula — graphify-style CLI for any assistant"
 readme = "README.md"
 license = "Apache-2.0"

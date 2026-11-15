@@ -302,7 +302,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Index a local PDF/markdown/text file into the shared ~/.folio hybrid index",
     )
     _add_out_arg(p_add)
-    p_add.add_argument("path", type=Path, help="Path to .pdf / .md / .txt")
+    p_add.add_argument(
+        "path",
+        type=Path,
+        help="Path to .pdf / .md / .txt / LangChain sidebars.json",
+    )
     p_add.add_argument(
         "--source-id",
         default=None,

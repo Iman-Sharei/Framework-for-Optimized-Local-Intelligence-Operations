@@ -1,57 +1,73 @@
 ---
 name: folio
-description: "Use for any AI engineering / MLOps / RAG / agent / GPU / AI infra / related AI architecture decision. Queries the local hybrid RAG over curated curricula (~/.folio). Treat those design questions as a folio query first."
+description: "Use for any AI engineering / MLOps / RAG / agent / GPU / AI infra / LangChain / LangGraph / LangSmith decision. Queries local hybrid RAG (~/.folio). For LangChain ecosystem coding, retrieve docs-nav URLs then open those official pages."
 ---
 
 # /folio
 
-Local hybrid RAG over curated AI-engineer / MLOps / infra markdown curricula.
-Persistent vector + BM25 index in `~/.folio/` (or `$FOLIO_HOME`). No API key required.
+Local hybrid RAG over curated AI-engineer / MLOps / infra curricula **plus** local
+handbooks and a LangChain docs navigation map. Index: `~/.folio/` (or `$FOLIO_HOME`).
 
 ## Usage
 
 ```
-/folio                                              # orient + ensure index
-/folio bootstrap                                    # download prebuilt index (preferred)
-/folio build                                        # sync curated sources + ingest
-/folio update                                       # refresh from maintainer Release
-/folio update --from-source                         # rebuild from curated git sources
-/folio query "<question>"                           # hybrid retrieve (BM25 + dense + RRF + CRAG)
-/folio query "<question>" --json                    # machine-readable hits for agents
-/folio query "<question>" -k 10                     # more chunks
-/folio query "<question>" --rerank                  # optional cross-encoder
-/folio status                                       # CLI + index health
-/folio install --project --platform cursor          # wire this repo's assistant
+/folio query "<question>" --json
+/folio query "<question>" --source langchain-docs-nav --json
+/folio add /path/to/file.pdf|.md|.json
+/folio status
+/folio install --project --platform cursor
 ```
 
 ## What folio is for
 
-Ground AI / MLOps / AI-infra decisions in retrieved citations from curated curricula
-(currently senior AI revision guide + AI infra lessons; more domains later).
-
-**When to query:** RAG, embeddings, vector DBs, agents, training/GPU, model optimization,
-feature stores, GitOps, SRE/SLO for ML, AI infra, or related senior AI trade-offs.
+**When to query:** RAG, embeddings, vector DBs, agents, LangChain / LangGraph / LangSmith /
+Deep Agents, training/GPU, model optimization, feature stores, GitOps, SRE/SLO for ML,
+AI infra, or related senior AI trade-offs.
 
 **When not to:** ordinary product code exploration — use graphify / Read / Grep for that.
 
+## LangChain / LangGraph / LangSmith (mandatory)
+
+If the user asks about these frameworks **or** you are about to write/modify code that
+uses them (chains, graphs, tools, memory, LangSmith, Deep Agents, etc.):
+
+1. Run:
+   ```bash
+   folio query "<task keywords> LangChain LangGraph docs" --source langchain-docs-nav -k 12 --json
+   ```
+2. From hits, collect official `https://docs.langchain.com/...` URLs (and nearby siblings
+   in the same section).
+3. **Open/WebFetch those doc pages** before implementing — they are the current API source
+   of truth. Prefer them over training memory.
+4. Also run a normal folio query (without `--source`) for architecture trade-offs from
+   curricula/handbooks when the task needs design advice, not only API lookup.
+5. Tell the user which doc URLs you checked.
+
+If `langchain-docs-nav` returns nothing useful, broaden the query once; if still empty,
+say the nav index may be stale and ask to re-run
+`folio add /path/to/sidebars.json --source-id langchain-docs-nav`.
+
 ## Token rule (strict)
 
-Do **not** WebFetch, clone, or paste the curriculum GitHub repos into chat.
-They are already indexed. Only `folio query`. If the index is missing, tell the user
-to run `folio bootstrap` or `folio build` — never dump raw curriculum markdown into context.
+Do **not** WebFetch/clone curated **curriculum GitHub repos** into chat — they are indexed;
+use `folio query` only.
+
+**Exception:** official `https://docs.langchain.com/...` URLs returned from
+`langchain-docs-nav` (or clearly listed in those hits) **may** be opened/WebFetched so
+implementation stays current.
+
+If the shared index is missing: instruct `folio bootstrap` (or `folio build`) once.
 
 ## What You Must Do When Invoked
 
 ### Fast path — index exists
 
-If `~/.folio/manifest.json` exists (or `$FOLIO_HOME/manifest.json`):
-
 ```bash
 folio query "<question>" --json
 ```
 
-Ground your answer **only** in returned citations (`source_id`, `rel_path`, `heading_path`, `text`).
-If scores are weak / empty, broaden terms and re-query once before inventing architecture.
+Ground architecture answers in returned citations (`source_id`, `rel_path`, `heading_path`).
+For LangChain coding tasks, follow the LangChain section above (nav → open docs).
 
 ### No index yet
 
@@ -60,16 +76,9 @@ folio bootstrap   # or: folio build
 folio query "<question>" --json
 ```
 
-### Install into a project
-
-```bash
-folio install --project --platform cursor
-folio bootstrap   # once per machine
-```
-
 ## Rules for answers
 
 1. Prefer patterns that appear in retrieved chunks; cite `source_id` + file + heading.
-2. When sources conflict (e.g. hybrid RAG vs RAGless), state the trade-off and pick for *this* constraint.
-3. Do not dump entire markdown files when retrieval exists.
-4. Never skip retrieval for “quick” AI architecture guesses when the index is present.
+2. When sources conflict, state the trade-off and pick for *this* constraint.
+3. Never skip retrieval for “quick” AI architecture or LangChain API guesses when the index is present.
+4. For LangChain ecosystem work: nav query → check listed docs URLs → then code.

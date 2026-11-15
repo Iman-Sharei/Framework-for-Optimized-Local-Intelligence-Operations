@@ -54,13 +54,93 @@ def _pdf_to_markdown(pdf: Path) -> str:
     return text
 
 
+def _walk_sidebar_links(nodes: list, trail: tuple[str, ...] = ()) -> list[tuple[tuple[str, ...], str]]:
+    out: list[tuple[tuple[str, ...], str]] = []
+    for node in nodes or []:
+        if not isinstance(node, dict):
+            continue
+        title = str(node.get("title") or node.get("name") or "").strip()
+        ntype = node.get("type")
+        url = node.get("url")
+        children = node.get("children")
+        if ntype == "link" and url:
+            out.append((trail + ((title,) if title else ()), str(url)))
+        elif children:
+            out.extend(_walk_sidebar_links(children, trail + ((title,) if title else ())))
+        elif url and title:
+            out.append((trail + (title,), str(url)))
+    return out
+
+
+def _sidebars_json_to_markdown(path: Path) -> str:
+    """Turn a LangChain/Mintlify sidebars.json export into retrieval-friendly markdown.
+
+    Each nav link becomes a searchable line with section trail + URL so assistants
+    can recommend which official docs pages to open before coding.
+    """
+    import json
+    from collections import defaultdict
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or "pages" not in data:
+        raise RuntimeError(f"Not a folio docs-nav sidebars.json: {path}")
+
+    generated = data.get("generated_at") or "unknown"
+    source = data.get("source") or path.name
+    buckets: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
+    seen_urls: set[str] = set()
+
+    for page in data.get("pages") or []:
+        base = tuple(str(x) for x in (page.get("section_trail") or []) if x)
+        lang = str(page.get("language") or "").strip()
+        for trail, url in _walk_sidebar_links(page.get("sidebar") or []):
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            leaf = trail[-1] if trail else url.rsplit("/", 1)[-1]
+            parent = " > ".join([x for x in (base + trail[:-1]) if x]) or "Docs"
+            buckets[parent].append((leaf, url, lang))
+
+    parts: list[str] = [
+        "# LangChain ecosystem docs navigation map\n",
+        f"_Generated: {generated}_\n",
+        f"_Source: {source}_\n",
+        f"_Unique doc URLs: {len(seen_urls)}_\n",
+        "\n## How assistants must use this index\n",
+        "When the user asks about LangChain, LangGraph, LangSmith, Deep Agents, "
+        "or related framework APIs / implementation:\n",
+        "1. `folio query \"<task> LangChain docs\" --source langchain-docs-nav --json`\n",
+        "2. From hits, collect the official `https://docs.langchain.com/...` URLs\n",
+        "3. Open/WebFetch **those pages** (current docs) before writing code\n",
+        "4. Still use other folio curricula for architecture trade-offs\n",
+        "\nDo **not** invent outdated LangChain APIs from memory when this nav index "
+        "returns matching doc URLs.\n",
+    ]
+
+    for parent in sorted(buckets.keys()):
+        parts.append(f"\n## {parent}\n")
+        for leaf, url, lang in buckets[parent]:
+            lang_bit = f" ({lang})" if lang else ""
+            # Repeat parent keywords so BM25/dense match section + leaf.
+            parts.append(
+                f"- **{leaf}**{lang_bit} — docs page for `{leaf}` in `{parent}` → {url}\n"
+            )
+
+    text = "\n".join(parts).strip() + "\n"
+    if len(seen_urls) < 10:
+        raise RuntimeError(f"sidebars.json produced too few links ({len(seen_urls)})")
+    return text
+
+
 def _load_as_markdown(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".pdf":
         return _pdf_to_markdown(path)
     if suffix in {".md", ".markdown", ".txt", ".text"}:
         return path.read_text(encoding="utf-8", errors="replace")
-    raise RuntimeError(f"Unsupported file type {suffix!r} (use .pdf .md .txt)")
+    if suffix == ".json":
+        return _sidebars_json_to_markdown(path)
+    raise RuntimeError(f"Unsupported file type {suffix!r} (use .pdf .md .txt .json)")
 
 
 def _merge_bm25(cfg: dict[str, Any], new_chunks: list[Chunk]) -> None:

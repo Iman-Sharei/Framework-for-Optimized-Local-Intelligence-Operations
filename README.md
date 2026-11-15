@@ -84,7 +84,7 @@ folio build
 folio update [--from-source]
 folio pack [--dest PATH]
 folio sync
-folio add /path/to/file.pdf   # also .md / .txt — append into ~/.folio index
+folio add /path/to/file.pdf|.md|.txt|.json   # append into ~/.folio (JSON: LangChain sidebars nav)
 folio query "<q>" [--json] [-k N] [--rerank]
 folio status
 folio install --project --platform cursor|claude|codex|agents
@@ -115,8 +115,8 @@ One-time setup (API token **or** Trusted Publishing):
 After Trusted Publishing is configured, a version tag is enough:
 
 ```bash
-git tag -a v0.3.4 -m v0.3.4
-git push origin v0.3.4
+git tag -a v0.3.5 -m v0.3.5
+git push origin v0.3.5
 ```
 
 Manual local publish (token in env):
