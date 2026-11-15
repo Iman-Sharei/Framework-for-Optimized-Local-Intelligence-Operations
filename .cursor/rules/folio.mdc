@@ -1,0 +1,30 @@
+---
+description: folio curated AI / MLOps / infra / LangChain docs-nav RAG
+alwaysApply: true
+---
+
+This project uses the standalone **folio** tool (shared curricula + docs-nav RAG on the machine).
+
+**MANDATORY: Before deciding or implementing AI engineering / MLOps / RAG / agent / GPU / AI infra / related AI architecture, you MUST run folio first:**
+- `folio query "<question>" --json` — hybrid retrieve grounded citations
+- `folio status` — check whether the shared index exists (`~/.folio` or `$FOLIO_HOME`)
+
+This applies to YOU and to every subagent you spawn for those topics (any mode: Agent, Plan, Debug, Ask). Do not skip folio because the topic “feels familiar”.
+
+### LangChain / LangGraph / LangSmith / Deep Agents (coding or Q&A)
+
+When the user asks about these **or** you are about to write code with them:
+1. `folio query "<task> LangChain LangGraph docs" --source langchain-docs-nav -k 12 --json`
+2. Collect official `https://docs.langchain.com/...` URLs from the hits
+3. **WebFetch/open those pages** before implementing (current API truth)
+4. Optionally also `folio query "<architecture question>" --json` (no `--source`) for curricula/handbook trade-offs
+5. Cite which doc URLs you checked
+
+**Token rule:** Do **not** WebFetch/clone curated curriculum GitHub repos — they are indexed; use `folio query` only.
+**Exception:** `docs.langchain.com` URLs from `langchain-docs-nav` hits may be opened/WebFetched.
+
+Only skip folio when:
+1. The task is ordinary product/codebase work with no AI / MLOps / AI-infra / LangChain decision
+2. The shared index is missing — then instruct `folio bootstrap` (or `folio build`) once
+
+After `folio query`, ground choices in returned `source_id` + `rel_path` + `heading_path` citations (and opened LangChain doc URLs when applicable).
