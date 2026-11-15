@@ -5,14 +5,24 @@ description: "Use for any AI engineering / MLOps / RAG / agent / GPU / AI infra 
 
 # /folio
 
-Local hybrid RAG over curated AI-engineer / MLOps / infra curricula **plus** local
-handbooks and a LangChain docs navigation map. Index: `~/.folio/` (or `$FOLIO_HOME`).
+Local hybrid RAG for AI-engineer / MLOps / infra topics and LangChain docs navigation.
+Index: `~/.folio/` (or `$FOLIO_HOME`).
+
+## Privacy (mandatory)
+
+When you run folio for the user:
+- **Never tell the user which folio sources / index ids you queried** (do not name
+  `source_id` values, corpus labels, or `--source` filters in chat).
+- Do not say things like “I’m searching X handbook” or “querying langchain-docs-nav”.
+- Internally you may use filters and JSON fields; **outward answers stay silent about
+  source names**. Ground answers in substance; for LangChain, you may cite opened
+  `docs.langchain.com` URLs only.
 
 ## Usage
 
 ```
 /folio query "<question>" --json
-/folio query "<question>" --source langchain-docs-nav --json
+/folio docs-suggest "<LangChain/LangGraph task>"
 /folio add /path/to/file.pdf|.md|.json
 /folio status
 /folio install --project --platform cursor
@@ -24,37 +34,34 @@ handbooks and a LangChain docs navigation map. Index: `~/.folio/` (or `$FOLIO_HO
 Deep Agents, training/GPU, model optimization, feature stores, GitOps, SRE/SLO for ML,
 AI infra, or related senior AI trade-offs.
 
-**When not to:** ordinary product code exploration — use graphify / Read / Grep for that.
+**When not to:** ordinary product / codebase exploration (Read / Grep / project tools).
 
 ## LangChain / LangGraph / LangSmith (mandatory)
 
 If the user asks about these frameworks **or** you are about to write/modify code that
 uses them (chains, graphs, tools, memory, LangSmith, Deep Agents, etc.):
 
-1. Run:
+1. Prefer:
    ```bash
-   folio query "<task keywords> LangChain LangGraph docs" --source langchain-docs-nav -k 12 --json
+   folio docs-suggest "<task keywords> LangChain LangGraph"
    ```
-2. From hits, collect official `https://docs.langchain.com/...` URLs (and nearby siblings
-   in the same section).
-3. **Open/WebFetch those doc pages** before implementing — they are the current API source
-   of truth. Prefer them over training memory.
-4. Also run a normal folio query (without `--source`) for architecture trade-offs from
-   curricula/handbooks when the task needs design advice, not only API lookup.
-5. Tell the user which doc URLs you checked.
+   (or internally `folio query … --source langchain-docs-nav -k 12 --json` — do **not**
+   announce that filter name to the user)
+2. Collect official `https://docs.langchain.com/...` pages from the output.
+3. **Open/WebFetch those doc pages** before implementing.
+4. Optionally also `folio query "<architecture question>" --json` for design trade-offs.
+5. You may tell the user which **docs.langchain.com** URLs you checked — never folio
+   source names.
 
-If `langchain-docs-nav` returns nothing useful, broaden the query once; if still empty,
-say the nav index may be stale and ask to re-run
-`folio add /path/to/sidebars.json --source-id langchain-docs-nav`.
+If docs-suggest / nav returns nothing useful, broaden the query once; if still empty,
+ask to re-index with `folio add /path/to/sidebars.json` (no need to name internal ids).
 
 ## Token rule (strict)
 
-Do **not** WebFetch/clone curated **curriculum GitHub repos** into chat — they are indexed;
-use `folio query` only.
+Do **not** WebFetch/clone curriculum GitHub repos into chat — use `folio query` only.
 
-**Exception:** official `https://docs.langchain.com/...` URLs returned from
-`langchain-docs-nav` (or clearly listed in those hits) **may** be opened/WebFetched so
-implementation stays current.
+**Exception:** official `https://docs.langchain.com/...` URLs from docs-suggest / nav hits
+**may** be opened/WebFetched.
 
 If the shared index is missing: instruct `folio bootstrap` (or `folio build`) once.
 
@@ -66,7 +73,7 @@ If the shared index is missing: instruct `folio bootstrap` (or `folio build`) on
 folio query "<question>" --json
 ```
 
-Ground architecture answers in returned citations (`source_id`, `rel_path`, `heading_path`).
+Ground architecture answers in retrieved content. Do not echo `source_id` to the user.
 For LangChain coding tasks, follow the LangChain section above (nav → open docs).
 
 ### No index yet
@@ -78,7 +85,8 @@ folio query "<question>" --json
 
 ## Rules for answers
 
-1. Prefer patterns that appear in retrieved chunks; cite `source_id` + file + heading.
-2. When sources conflict, state the trade-off and pick for *this* constraint.
+1. Prefer patterns that appear in retrieved chunks; do **not** name folio sources.
+2. When retrieved material conflicts, state the trade-off and pick for *this* constraint.
 3. Never skip retrieval for “quick” AI architecture or LangChain API guesses when the index is present.
-4. For LangChain ecosystem work: nav query → check listed docs URLs → then code.
+4. For LangChain ecosystem work: nav → check listed docs URLs → then code.
+5. Never disclose folio source / corpus names in user-facing replies.

@@ -42,10 +42,12 @@ def test_format_context_includes_citations_and_respects_budget():
         ),
     ]
     out = format_context(hits, max_chars=10_000)
-    assert "source=s1" in out and "file=a.md" in out
+    assert "file=a.md" in out
     assert "heading=H1" in out
+    assert "source=" not in out  # never leak corpus names in human output
     tiny = format_context(hits, max_chars=80)
-    assert "source=s1" in tiny
+    assert "file=a.md" in tiny or "[1]" in tiny
+    assert "source=" not in tiny
     assert "[1]" in tiny
     # second block dropped when budget is tight
     assert "[2]" not in tiny

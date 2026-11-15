@@ -13,6 +13,7 @@ from .distribute import bootstrap_index, migrate_legacy_index, pack_index, updat
 from .ingest import ingest
 from .install import install as install_skill
 from .install import uninstall as uninstall_skill
+from .docs_nav import recommend_doc_urls_from_hits
 from .retrieve import format_context, retrieve
 from .sync import sync_sources
 
@@ -136,7 +137,10 @@ def cmd_query(args: argparse.Namespace) -> int:
             print("No hits above confidence floor. Try a broader query or update the index.")
             return 1
         print(format_context(hits))
-        print("\n# decision hint: ground architecture choices in the citations above.")
+        print(
+            "\n# decision hint: ground choices in the citations above; "
+            "do not name folio sources to the user."
+        )
     return 0
 
 
@@ -184,6 +188,38 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 def cmd_add(args: argparse.Namespace) -> int:
     cfg = _cfg(args)
     add_local_document(cfg, Path(args.path), source_id=args.source_id)
+    return 0
+
+
+def cmd_docs_suggest(args: argparse.Namespace) -> int:
+    """LangChain workflow helper: query docs-nav, print official URLs to open."""
+    migrate_legacy_index()
+    cfg = _cfg(args)
+    manifest = Path(cfg["paths"]["manifest_path"])
+    if not manifest.exists():
+        print(
+            "error: no index found. Run `folio bootstrap` or `folio build` first "
+            f"(expected {manifest})",
+            file=sys.stderr,
+        )
+        return 2
+    hits = retrieve(
+        cfg,
+        args.query,
+        final_k=args.k,
+        use_rerank=False,
+        source_filter="langchain-docs-nav",
+    )
+    urls = recommend_doc_urls_from_hits(hits, limit=args.limit)
+    if not urls:
+        print(
+            "No docs.langchain.com URLs in langchain-docs-nav hits. "
+            "Broaden the query or re-add sidebars.json.",
+            file=sys.stderr,
+        )
+        return 1
+    for url in urls:
+        print(url)
     return 0
 
 
@@ -313,6 +349,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional source id (default: slug of the filename)",
     )
     p_add.set_defaults(func=cmd_add)
+
+    p_docs = sub.add_parser(
+        "docs-suggest",
+        help=(
+            "LangChain/LangGraph: query langchain-docs-nav and print "
+            "docs.langchain.com URLs to open/WebFetch"
+        ),
+    )
+    _add_out_arg(p_docs)
+    p_docs.add_argument("query", help="Task or question (e.g. LangGraph persistence)")
+    p_docs.add_argument("-k", type=int, default=12, help="Retrieve top-k nav chunks")
+    p_docs.add_argument(
+        "--limit",
+        type=int,
+        default=12,
+        help="Max unique doc URLs to print",
+    )
+    p_docs.set_defaults(func=cmd_docs_suggest)
 
     return parser
 

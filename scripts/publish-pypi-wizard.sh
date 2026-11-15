@@ -221,23 +221,29 @@ pause "Signed in to PyPI?"
 # ── Stage 2 ───────────────────────────────────────────────────────────────
 stage "GitHub Environment: pypi"
 say "Trusted Publishing expects a GitHub Environment named exactly: pypi"
-open_url "https://github.com/Iman-Sharei/folio/settings/environments"
-step "Click New environment → name it pypi → Configure environment → Save."
-note "No required reviewers needed for the first publish."
-pause "Environment pypi exists?"
+if command -v gh >/dev/null 2>&1 \
+  && gh api repos/Iman-Sharei/folio/environments/pypi >/dev/null 2>&1; then
+  say "GitHub Environment pypi is already configured on Iman-Sharei/folio."
+  note "Workflow publish-pypi.yml uses environment: pypi + id-token: write."
+else
+  open_url "https://github.com/Iman-Sharei/folio/settings/environments"
+  step "Click New environment → name it pypi → Configure environment → Save."
+  note "No required reviewers needed for the first publish."
+  pause "Environment pypi exists?"
+fi
 
 # ── Stage 3 ───────────────────────────────────────────────────────────────
 stage "Trusted Publisher on PyPI"
-say "Tell PyPI which GitHub Actions workflow may upload folio-cli."
-open_url "https://pypi.org/manage/account/publishing/"
-step "Under Pending publisher, fill:"
-note "  PyPI project name: folio-cli"
+say "folio-cli already exists on PyPI — add a Trusted Publisher on the project."
+say "(PyPI has no public API for this; you must click Add in the browser.)"
+open_url "https://pypi.org/manage/project/folio-cli/settings/publishing/"
+step "Sign in if needed, then under Add a new publisher → GitHub:"
 note "  Owner: Iman-Sharei"
 note "  Repository: folio"
 note "  Workflow name: publish-pypi.yml"
 note "  Environment name: pypi"
-step "Click Add (pending publisher). First successful CI upload creates the project."
-pause "Pending trusted publisher saved?"
+step "Click Add. Leave Pending publishers alone unless the project did not exist yet."
+pause "Trusted publisher for folio-cli saved?"
 
 # ── Stage 4 ───────────────────────────────────────────────────────────────
 stage "API token (optional local publish)"

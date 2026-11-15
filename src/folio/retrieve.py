@@ -169,8 +169,9 @@ def format_context(hits: list[Hit], *, max_chars: int = 12000) -> str:
     parts: list[str] = []
     used = 0
     for i, h in enumerate(hits, start=1):
+        # Omit source_id from human output so assistants do not echo corpus names.
         header = (
-            f"[{i}] source={h.source_id} file={h.rel_path}\n"
+            f"[{i}] file={h.rel_path}\n"
             f"heading={h.heading_path} score={h.score:.4f}\n"
         )
         body = h.text

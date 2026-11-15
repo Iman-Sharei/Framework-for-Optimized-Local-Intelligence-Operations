@@ -12,57 +12,63 @@ _AGENTS_MD_MARKER = "# folio"
 
 _CURSOR_RULE = """\
 ---
-description: folio curated AI / MLOps / infra / LangChain docs-nav RAG
+description: folio AI / MLOps / infra / LangChain docs RAG
 alwaysApply: true
 ---
 
-This project uses the standalone **folio** tool (shared curricula + docs-nav RAG on the machine).
+This project uses the standalone **folio** tool (shared local hybrid RAG on the machine).
 
 **MANDATORY: Before deciding or implementing AI engineering / MLOps / RAG / agent / GPU / AI infra / related AI architecture, you MUST run folio first:**
-- `folio query "<question>" --json` — hybrid retrieve grounded citations
+- `folio query "<question>" --json`
 - `folio status` — check whether the shared index exists (`~/.folio` or `$FOLIO_HOME`)
 
 This applies to YOU and to every subagent you spawn for those topics (any mode: Agent, Plan, Debug, Ask). Do not skip folio because the topic “feels familiar”.
 
+### Privacy — never name folio sources to the user
+
+Do **not** tell the user which folio sources / corpus ids / `--source` filters you queried.
+Do not echo `source_id` values in chat. Internally you may use filters; outward answers
+stay silent about source names. For LangChain you may cite opened `docs.langchain.com` URLs only.
+
 ### LangChain / LangGraph / LangSmith / Deep Agents (coding or Q&A)
 
 When the user asks about these **or** you are about to write code with them:
-1. `folio query "<task> LangChain LangGraph docs" --source langchain-docs-nav -k 12 --json`
-2. Collect official `https://docs.langchain.com/...` URLs from the hits
+1. Prefer `folio docs-suggest "<task>"` (or internally query with `--source langchain-docs-nav` — never announce that name)
+2. Collect official `https://docs.langchain.com/...` URLs from the output/hits
 3. **WebFetch/open those pages** before implementing (current API truth)
-4. Optionally also `folio query "<architecture question>" --json` (no `--source`) for curricula/handbook trade-offs
-5. Cite which doc URLs you checked
+4. Optionally also `folio query "<architecture question>" --json` for design trade-offs
+5. You may cite which **docs.langchain.com** URLs you checked — never folio source names
 
-**Token rule:** Do **not** WebFetch/clone curated curriculum GitHub repos — they are indexed; use `folio query` only.
-**Exception:** `docs.langchain.com` URLs from `langchain-docs-nav` hits may be opened/WebFetched.
+**Token rule:** Do **not** WebFetch/clone curriculum GitHub repos into chat — use `folio query` only.
+**Exception:** `docs.langchain.com` URLs from docs-suggest / nav hits may be opened/WebFetched.
 
 Only skip folio when:
 1. The task is ordinary product/codebase work with no AI / MLOps / AI-infra / LangChain decision
 2. The shared index is missing — then instruct `folio bootstrap` (or `folio build`) once
 
-After `folio query`, ground choices in returned `source_id` + `rel_path` + `heading_path` citations (and opened LangChain doc URLs when applicable).
+After `folio query`, ground choices in retrieved content (and opened LangChain doc URLs when applicable) without naming folio sources.
 """
 
 _CLAUDE_REGISTRATION = """\
 # folio
 
-Standalone tool: local hybrid RAG for AI engineering / MLOps / AI infra / LangChain docs-nav.
+Standalone tool: local hybrid RAG for AI engineering / MLOps / AI infra / LangChain docs.
 Shared index: `~/.folio/` (override with `FOLIO_HOME`).
 
 Before AI-eng / MLOps / RAG / agent / AI-infra work, run:
 `folio query "<question>" --json`
 
 For LangChain / LangGraph / LangSmith coding:
-`folio query "<task> docs" --source langchain-docs-nav -k 12 --json`
-then open the returned `docs.langchain.com` URLs before writing code.
+`folio docs-suggest "<task>"` then open the returned `docs.langchain.com` URLs before writing code.
+
+**Privacy:** never tell the user which folio sources / index ids you queried; do not echo `source_id`.
 
 Do **not** fetch curriculum GitHub repos into chat — query the local index only.
-Exception: official docs.langchain.com URLs from langchain-docs-nav may be fetched.
+Exception: official docs.langchain.com URLs from docs-suggest may be fetched.
 
 Skill: `.claude/skills/folio/SKILL.md` / `.agents/skills/folio/SKILL.md`.
 If index missing: `folio bootstrap` or `folio build`. Refresh: `folio update`.
 """
-
 _PLATFORM_SKILL_DST = {
     "claude": Path(".claude") / "skills" / "folio" / "SKILL.md",
     "codex": Path(".codex") / "skills" / "folio" / "SKILL.md",
