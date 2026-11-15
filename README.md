@@ -1,38 +1,60 @@
-# folio
+# 📚 folio
 
-Local hybrid RAG for **AI engineering / MLOps / AI infra** questions. Assistants query a
-shared index on the machine and get a short, grounded answer instead of pulling large
+Local hybrid RAG for **AI engineering · MLOps · AI infra** questions. Assistants query a
+shared index on your machine and get a short, grounded answer — without dumping large
 docs into chat.
 
-## Install
+[![PyPI](https://img.shields.io/pypi/v/folio-cli.svg)](https://pypi.org/project/folio-cli/)
+[![Python](https://img.shields.io/pypi/pyversions/folio-cli.svg)](https://pypi.org/project/folio-cli/)
+[![License](https://img.shields.io/github/license/Iman-Sharei/folio.svg)](https://github.com/Iman-Sharei/folio/blob/main/LICENSE)
+[![CI](https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml/badge.svg)](https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml)
+[![GitHub](https://img.shields.io/badge/GitHub-Iman--Sharei%2Ffolio-181717?logo=github)](https://github.com/Iman-Sharei/folio)
 
-PyPI name is **`folio-cli`**. The command is **`folio`**.
+> PyPI package: [`folio-cli`](https://pypi.org/project/folio-cli/) · CLI command: **`folio`** · Index: [`~/.folio`](https://github.com/Iman-Sharei/folio#index) · Releases: [latest](https://github.com/Iman-Sharei/folio/releases/latest)
+
+---
+
+## 🚀 Install
 
 ```bash
 uv tool install folio-cli
 folio --help
 ```
 
-## Index
+More: [uv tool docs](https://docs.astral.sh/uv/guides/tools/) · [PyPI folio-cli](https://pypi.org/project/folio-cli/)
 
-The index lives in **`~/.folio/`** (override with `FOLIO_HOME`). It is not stored inside product repos.
+Upgrade later with:
+
+```bash
+uv tool upgrade folio-cli
+```
+
+---
+
+## 🗄️ Index
+
+The index lives in **`~/.folio/`** (override with [`FOLIO_HOME`](https://github.com/Iman-Sharei/folio#index)). It is **not** stored inside product repos.
 
 ```bash
 folio bootstrap     # first download of the published pack
 folio status
 ```
 
-`folio bootstrap` does nothing if `~/.folio` already has an index. To replace it:
+`folio bootstrap` is a no-op when `~/.folio` already has an index. To replace it:
 
 ```bash
 folio update
 ```
 
-`folio update` downloads the latest pack and rewrites folio assistant files that are already in the current project (or in your home directory). It does not install folio into a project that never had it. Upgrade the program itself with `uv tool upgrade folio-cli`.
+Pack download: [`folio-index.tar.gz`](https://github.com/Iman-Sharei/folio/releases/latest/download/folio-index.tar.gz) (from [GitHub Releases](https://github.com/Iman-Sharei/folio/releases)).
 
-## Use in a project
+`folio update` refreshes the pack **and** rewrites folio assistant files already present in the current project (or your home directory). It does **not** install folio into a project that never had it.
 
-folio does **not** detect which assistant you use. If you omit `--platform`, it installs for **Cursor**.
+---
+
+## 🧩 Use in a project
+
+folio does **not** auto-detect your assistant. Omit `--platform` → installs for **[Cursor](https://cursor.com/)**.
 
 ```bash
 cd /path/to/your-project
@@ -42,25 +64,25 @@ folio query "when should a retrieval step widen the candidate set?"
 
 `--project` writes into the repo:
 
-| platform | files |
+| Platform | Files |
 |---|---|
-| `cursor` (default) | `.cursor/rules/folio.mdc`, `.agents/skills/folio/SKILL.md`, `AGENTS.md` |
-| `claude` | `.claude/skills/folio/SKILL.md`, `CLAUDE.md` |
-| `codex` | `.codex/skills/folio/SKILL.md` |
+| [`cursor`](https://cursor.com/) (default) | `.cursor/rules/folio.mdc`, `.agents/skills/folio/SKILL.md`, `AGENTS.md` |
+| [`claude`](https://docs.anthropic.com/en/docs/claude-code) | `.claude/skills/folio/SKILL.md`, `CLAUDE.md` |
+| [`codex`](https://github.com/openai/codex) | `.codex/skills/folio/SKILL.md` |
 | `agents` | `.agents/skills/folio/SKILL.md`, `AGENTS.md` |
 
-This repo already includes the Cursor, Claude, and Agents files above. In another project, run `folio install --project` (and `--platform claude` when you need Claude).
-
-Run it once for each assistant you use. For Cursor, the rule file is always written in the project directory. `SKILL.md` and `AGENTS.md` are added only with `--project`. For Claude, Codex, and `agents`, omitting `--project` writes those files under your home directory instead of the repo.
+This repo already ships the Cursor, Claude, and Agents files. In another project, run `folio install --project` (add `--platform claude` when you need Claude).
 
 ```bash
 folio install --project --platform claude
 folio install --project --platform codex
 ```
 
-Assistants must not name folio sources in replies to you, and must not pull curriculum repos into chat. Use `folio query`.
+Assistants must **not** name folio sources in replies, and must **not** pull curriculum repos into chat. Use `folio query`.
 
-## Commands
+---
+
+## ⌨️ Commands
 
 ```bash
 folio bootstrap
@@ -71,18 +93,24 @@ folio install --project [--platform cursor|claude|codex|agents]
 folio uninstall --project [--platform cursor|claude|codex|agents]
 ```
 
-`folio query` still searches the full index. `--budget` only caps what is printed (default 2000 tokens).
+`folio query` still searches the **full** index. [`--budget`](https://github.com/Iman-Sharei/folio#commands) only caps what is printed (default **2000** tokens).
 
-## Tests
+---
+
+## 🧪 Tests
 
 ```bash
 uv sync
 uv run pytest -q
 ```
 
-## Maintainer
+CI: [GitHub Actions](https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml)
 
-Users do not add documents. `folio add` is for publishing a new pack.
+---
+
+## 🛠️ Maintainer
+
+Users do **not** add documents. `folio add` is for publishing a new pack.
 
 ```bash
 folio add /path/to/file.pdf|.md|.txt|.json
@@ -92,4 +120,14 @@ TAG=$(gh release view --repo Iman-Sharei/folio --json tagName -q .tagName)
 gh release upload "$TAG" dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
 ```
 
-Publish the program by tagging `vX.Y.Z`. That uses the GitHub Environment `pypi` and a PyPI Trusted Publisher for `folio-cli`.
+Publish the program by tagging `vX.Y.Z`. That uses the GitHub Environment [`pypi`](https://github.com/Iman-Sharei/folio/settings/environments) and a [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/) for [`folio-cli`](https://pypi.org/project/folio-cli/).
+
+---
+
+## 🔗 Links
+
+- 📦 [PyPI — folio-cli](https://pypi.org/project/folio-cli/)
+- 🐙 [GitHub — Iman-Sharei/folio](https://github.com/Iman-Sharei/folio)
+- 🏷️ [Releases & index pack](https://github.com/Iman-Sharei/folio/releases)
+- 🐛 [Issues](https://github.com/Iman-Sharei/folio/issues)
+- ⚖️ [Apache-2.0 license](https://github.com/Iman-Sharei/folio/blob/main/LICENSE)

@@ -5,8 +5,13 @@ import sys
 from pathlib import Path
 
 from .config import package_dir
+from .term import path_link, url_link
 
 TOOL = "folio"
+_PYPI_URL = "https://pypi.org/project/folio-cli/"
+_REPO_URL = "https://github.com/Iman-Sharei/folio"
+_RELEASES_URL = "https://github.com/Iman-Sharei/folio/releases/latest"
+_README_URL = "https://github.com/Iman-Sharei/folio#readme"
 _CURSOR_RULE_PATH = Path(".cursor") / "rules" / "folio.mdc"
 _AGENTS_MD_MARKER = "# folio"
 
@@ -57,24 +62,27 @@ def _write_skill(dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     text = _skill_src().read_text(encoding="utf-8")
     if dst.exists() and dst.read_text(encoding="utf-8") == text:
-        print(f"folio skill already configured at {dst.resolve()} (no change)")
+        print(f"✅ folio skill already configured at {path_link(dst)} (no change)")
         return
     action = "updated" if dst.exists() else "written"
     dst.write_text(text, encoding="utf-8")
-    print(f"folio skill {action} at {dst.resolve()}")
+    print(f"✨ folio skill {action} at {path_link(dst)}")
 
 
 def _cursor_install(project_dir: Path) -> None:
     rule_path = project_dir / _CURSOR_RULE_PATH
     rule_path.parent.mkdir(parents=True, exist_ok=True)
     if rule_path.exists() and rule_path.read_text(encoding="utf-8") == _CURSOR_RULE:
-        print(f"folio Cursor rule at {rule_path.resolve()} already configured (no change)")
+        print(f"✅ folio Cursor rule at {path_link(rule_path)} already configured (no change)")
         return
     action = "updated" if rule_path.exists() else "written"
     rule_path.write_text(_CURSOR_RULE, encoding="utf-8")
-    print(f"folio Cursor rule {action} at {rule_path.resolve()}")
+    print(f"✨ folio Cursor rule {action} at {path_link(rule_path)}")
     print("Cursor will retrieve-first via folio for AI / MLOps / infra tasks.")
-    print("Shared index: ~/.folio — run `folio bootstrap` or `folio build` if missing.")
+    print(
+        "Shared index: ~/.folio — run `folio bootstrap` or `folio build` if missing. "
+        f"Pack: {url_link(_RELEASES_URL, 'GitHub Releases')}."
+    )
 
 
 def _cursor_uninstall(project_dir: Path) -> None:
@@ -145,11 +153,11 @@ def _claude_md_register(project_dir: Path | None, user_global: bool) -> None:
         content = _strip_marker_section(content, "# aieng")
         new_content = _replace_or_append_section(content, _AGENTS_MD_MARKER, _CLAUDE_REGISTRATION)
         if existed and new_content == content:
-            print(f"folio already registered in {target} (no change)")
+            print(f"✅ folio already registered in {path_link(target)} (no change)")
             return
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(new_content, encoding="utf-8")
-        print(f"folio registered in {target.resolve()}")
+        print(f"✨ folio registered in {path_link(target)}")
     except OSError as exc:
         print(f"skipped CLAUDE.md registration: {exc}", file=sys.stderr)
 
@@ -162,12 +170,24 @@ def _agents_md_register(project_dir: Path) -> None:
         content = _strip_marker_section(content, "# aieng")
         new_content = _replace_or_append_section(content, _AGENTS_MD_MARKER, _CLAUDE_REGISTRATION)
         if existed and new_content == content:
-            print(f"folio already registered in {target} (no change)")
+            print(f"✅ folio already registered in {path_link(target)} (no change)")
             return
         target.write_text(new_content, encoding="utf-8")
-        print(f"folio registered in {target.resolve()}")
+        print(f"✨ folio registered in {path_link(target)}")
     except OSError as exc:
         print(f"skipped AGENTS.md registration: {exc}", file=sys.stderr)
+
+
+def _print_install_next_steps() -> None:
+    print()
+    print("📌 Next steps")
+    print(f"  1. folio bootstrap   ← download pack from {url_link(_RELEASES_URL, 'releases')}")
+    print('  2. folio query "…"    ← ask a concrete AI / MLOps question')
+    print(
+        f"  📖 {url_link(_README_URL, 'README')} · "
+        f"📦 {url_link(_PYPI_URL, 'PyPI')} · "
+        f"🐙 {url_link(_REPO_URL, 'GitHub')}"
+    )
 
 
 def _skill_dst_for(platform: str, *, project: bool, project_dir: Path) -> Path | None:
@@ -245,8 +265,9 @@ def install(
             legacy_skill = project_dir / ".agents" / "skills" / "aieng"
             if legacy_skill.exists():
                 shutil.rmtree(legacy_skill)
-                print(f"removed legacy {legacy_skill}")
+                print(f"removed legacy {path_link(legacy_skill)}")
             _agents_md_register(project_dir)
+        _print_install_next_steps()
         return 0
 
     dst = _skill_dst_for(platform, project=project, project_dir=project_dir)
@@ -258,8 +279,7 @@ def install(
     if platform == "agents" and project:
         _agents_md_register(project_dir)
 
-    print()
-    print("Next: `folio bootstrap` (or `folio build`), then `folio query \"...\"`.")
+    _print_install_next_steps()
     return 0
 
 

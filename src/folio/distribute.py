@@ -14,6 +14,7 @@ from typing import Any
 from .config import ensure_data_dirs, resolve_out_dir, write_default_config
 from .ingest import index_version_now, ingest
 from .sync import sync_sources
+from .term import path_link, url_link
 
 # Files/dirs included in a portable index pack (query-ready without sources).
 _PACK_MEMBERS = ("chroma", "bm25", "manifest.json", "config.yaml")
@@ -118,7 +119,10 @@ def bootstrap_index(
     out = Path(cfg["paths"]["out_dir"])
     manifest = Path(cfg["paths"]["manifest_path"])
     if manifest.exists() and not force:
-        print(f"[bootstrap] index already present at {out} (use --force to replace)")
+        print(
+            f"✅ [bootstrap] index already present at {path_link(out)} "
+            "(use --force to replace)"
+        )
         return out
 
     ensure_data_dirs(cfg)
@@ -128,8 +132,9 @@ def bootstrap_index(
         src = archive.expanduser().resolve()
         if not src.exists():
             raise FileNotFoundError(src)
-        print(f"[bootstrap] extracting {src} → {out}")
+        print(f"📦 [bootstrap] extracting {path_link(src)} → {path_link(out)}")
         _extract_into_out(src, out)
+        print(f"✅ [bootstrap] ready at {path_link(out)}")
         return out
 
     resolved = (url or _release_url(cfg)).strip()
@@ -143,11 +148,11 @@ def bootstrap_index(
 
     with tempfile.TemporaryDirectory(prefix="folio-bootstrap-") as tmp:
         tmp_path = Path(tmp) / "folio-index.tar.gz"
-        print(f"[bootstrap] downloading {resolved}")
+        print(f"⬇️  [bootstrap] downloading {url_link(resolved)}")
         _download(resolved, tmp_path)
         _extract_into_out(tmp_path, out)
 
-    print(f"[bootstrap] ready at {out}")
+    print(f"✅ [bootstrap] ready at {path_link(out)}")
     return out
 
 
