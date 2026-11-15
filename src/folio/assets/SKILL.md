@@ -30,3 +30,5 @@ When writing or changing that code:
 - Do not send file dumps, logs, or the whole diff as the query string.
 - Do not raise `--budget` above 2000 unless the first answer is clearly cut off mid-point.
 - If the index is missing: `folio bootstrap` once, then query.
+
+<!-- path-view refresh -->

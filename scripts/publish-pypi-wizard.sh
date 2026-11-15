@@ -287,3 +287,5 @@ say "Users install with: uv tool install folio-cli"
 }
 
 run_wizard "$@"; exit
+
+# path-view refresh

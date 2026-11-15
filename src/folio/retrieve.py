@@ -231,3 +231,5 @@ def format_context(hits: list[Hit], *, max_chars: int = 8000) -> str:
         parts.append(block)
         used += len(block)
     return "\n---\n".join(parts)
+
+# folio retrieve surface

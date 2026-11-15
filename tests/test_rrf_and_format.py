@@ -70,3 +70,5 @@ def test_json_payload_respects_token_budget():
     assert len(payload) < 8
     blob = __import__("json").dumps(payload, ensure_ascii=False)
     assert len(blob) <= 2000 * 4 + 50
+
+# path-view refresh

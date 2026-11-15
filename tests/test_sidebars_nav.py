@@ -85,3 +85,5 @@ def test_recommend_doc_urls_from_hits_dedupes_and_orders():
         "https://docs.langchain.com/oss/python/langgraph/persistence",
         "https://docs.langchain.com/oss/python/langgraph/streaming",
     ]
+
+# path-view refresh

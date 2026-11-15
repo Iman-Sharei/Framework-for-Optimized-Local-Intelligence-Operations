@@ -35,3 +35,5 @@ retrieval:
   crag_widen_factor: 2
   reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2
   confidence_floor: 0.008
+
+# path-view refresh

@@ -1,4 +1,4 @@
-"""Helpers for LangChain docs-nav retrieval → official page URLs to open."""
+"""Helpers for LangChain docs-nav retrieval → official docs.langchain.com URLs to open."""
 
 from __future__ import annotations
 
