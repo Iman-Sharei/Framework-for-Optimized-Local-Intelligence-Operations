@@ -1,3 +1,3 @@
-"""folio — local hybrid RAG over curated AI / MLOps / data curricula (graphify-style)."""
+"""folio — local hybrid RAG for AI engineering / MLOps / AI infra / LangChain docs."""
 
 __version__ = "0.3.6"
