@@ -192,7 +192,9 @@ def cmd_add(args: argparse.Namespace) -> int:
 
 def cmd_docs_suggest(args: argparse.Namespace) -> int:
     """LangChain workflow helper: query docs-nav, print official URLs to open."""
-    migrate_legacy_index()
+    # Only migrate the default home index; an explicit --out is already isolated.
+    if getattr(args, "out", None) is None:
+        migrate_legacy_index()
     cfg = _cfg(args)
     manifest = Path(cfg["paths"]["manifest_path"])
     if not manifest.exists():

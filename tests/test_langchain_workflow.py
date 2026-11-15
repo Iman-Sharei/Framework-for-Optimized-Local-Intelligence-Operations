@@ -80,6 +80,7 @@ def test_local_index_nav_query_returns_docs_urls_to_open():
 
 
 def test_docs_suggest_cli_prints_urls(monkeypatch, capsys, folio_home: Path):
+    """Hermetic: never touches ~/.folio; uses FOLIO_HOME + --out + fake retrieve."""
     from folio import cli
 
     (folio_home / "manifest.json").write_text("{}", encoding="utf-8")
@@ -104,13 +105,26 @@ def test_docs_suggest_cli_prints_urls(monkeypatch, capsys, folio_home: Path):
     ]
 
     def fake_retrieve(cfg, query, *, final_k=None, use_rerank=False, source_filter=None):
+        assert Path(cfg["paths"]["out_dir"]) == folio_home.resolve()
         assert "LangGraph" in query or "langgraph" in query.lower()
         assert source_filter == "langchain-docs-nav"
         return fake_hits
 
     monkeypatch.setattr(cli, "retrieve", fake_retrieve)
+    monkeypatch.setattr(cli, "migrate_legacy_index", lambda: None)
     code = cli.main(["docs-suggest", "LangGraph persistence", "--out", str(folio_home)])
     assert code == 0
     out = capsys.readouterr().out.strip().splitlines()
     assert out[0] == "https://docs.langchain.com/oss/python/langgraph/persistence"
     assert out[1] == "https://docs.langchain.com/oss/python/langgraph/streaming"
+
+
+def test_docs_suggest_cli_errors_without_index(monkeypatch, capsys, folio_home: Path):
+    from folio import cli
+
+    monkeypatch.setattr(cli, "migrate_legacy_index", lambda: None)
+    code = cli.main(["docs-suggest", "LangGraph persistence", "--out", str(folio_home)])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "no index found" in err
+    assert str(folio_home) in err
