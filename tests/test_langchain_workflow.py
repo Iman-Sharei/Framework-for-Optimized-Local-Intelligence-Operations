@@ -79,8 +79,10 @@ def test_local_index_nav_query_returns_docs_urls_to_open():
     assert extract_doc_urls(joined)
 
 
-def test_docs_suggest_cli_prints_urls(monkeypatch, capsys):
+def test_docs_suggest_cli_prints_urls(monkeypatch, capsys, folio_home: Path):
     from folio import cli
+
+    (folio_home / "manifest.json").write_text("{}", encoding="utf-8")
 
     fake_hits = [
         Hit(
@@ -107,7 +109,7 @@ def test_docs_suggest_cli_prints_urls(monkeypatch, capsys):
         return fake_hits
 
     monkeypatch.setattr(cli, "retrieve", fake_retrieve)
-    code = cli.main(["docs-suggest", "LangGraph persistence"])
+    code = cli.main(["docs-suggest", "LangGraph persistence", "--out", str(folio_home)])
     assert code == 0
     out = capsys.readouterr().out.strip().splitlines()
     assert out[0] == "https://docs.langchain.com/oss/python/langgraph/persistence"
