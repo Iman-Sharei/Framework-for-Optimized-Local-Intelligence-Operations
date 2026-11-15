@@ -6,6 +6,20 @@ import os
 import sys
 from pathlib import Path
 
+from .config import package_dir
+
+
+def banner_text() -> str:
+    """HyperTerminal-style FOLIO splash (GONET-like @/ block letters)."""
+    path = package_dir() / "assets" / "banner.txt"
+    if path.is_file():
+        return path.read_text(encoding="utf-8").rstrip() + "\n"
+    return "folio\n"
+
+
+def print_banner() -> None:
+    print(banner_text(), end="")
+
 
 def _links_enabled() -> bool:
     if os.environ.get("FOLIO_NO_HYPERLINKS", "").strip().lower() in {"1", "true", "yes"}:

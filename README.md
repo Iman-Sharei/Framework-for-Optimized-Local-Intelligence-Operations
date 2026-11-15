@@ -1,3 +1,17 @@
+<pre align="center">
+@@@@@@@@@@@   //@@@@@\   @@@        @@@@@@@@@   //@@@@@\
+@@@          @@/     \@@  @@@           @@@     @@/     \@@
+@@@          @@@     @@@  @@@           @@@     @@@     @@@
+@@@@@@@@     @@@     @@@  @@@           @@@     @@@     @@@
+@@@          @@@     @@@  @@@           @@@     @@@     @@@
+@@@          @@\     //@@  @@@           @@@     @@\     //@@
+@@@           \@@@@@//   @@@@@@@@@  @@@@@@@@@   \@@@@@//
+
+        LOCAL HYBRID RAG FOR AI ENGINEERING
+           MLOps · AI INFRA · LANGCHAIN
+        ELECTRONIC KNOWLEDGE RETRIEVAL SERVICE
+</pre>
+
 <p align="center">
   <img src="docs/assets/folio-banner.jpg" alt="folio — local RAG for AI engineering assistants" width="100%">
 </p>
@@ -143,6 +157,7 @@ To **index** a PDF into the shared RAG pack (maintainer path), use `folio add` i
 ## ⌨️ Commands
 
 ```bash
+folio banner
 folio bootstrap
 folio update
 folio status
@@ -152,6 +167,8 @@ folio uninstall --project [--platform cursor|claude|codex|agents]
 folio skill-from <path> [--name NAME] [--platform agents|claude|codex|all]
 folio docs-suggest "<LangChain task>"
 ```
+
+`folio banner` prints the HyperTerminal-style ASCII splash (also shown by `folio status`).
 
 `folio query` still searches the **full** index. `--budget` only caps what is printed (default **2000** tokens).
 

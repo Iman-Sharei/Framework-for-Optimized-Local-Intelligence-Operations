@@ -19,6 +19,7 @@ from .retrieve import apply_text_budget, format_context, hits_to_json_payload, r
 from .skill_from import skill_from
 from .store import bm25_index_path
 from .sync import sync_sources
+from .term import print_banner
 
 
 def _cli_version() -> str:
@@ -143,11 +144,20 @@ def cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_banner(args: argparse.Namespace) -> int:
+    """Print the HyperTerminal-style FOLIO splash."""
+    print_banner()
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     migrate_legacy_index()
     cfg = _cfg(args)
     out = cfg["paths"]["out_dir"]
     manifest = cfg["paths"]["manifest_path"]
+    if not getattr(args, "quiet", False):
+        print_banner()
+        print()
     print(f"cli:      folio {_cli_version()}")
     print(f"out:      {out}")
     print(f"chroma:   {cfg['paths']['chroma_dir']} exists={Path(cfg['paths']['chroma_dir']).exists()}")
@@ -323,8 +333,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_query.add_argument("--json", action="store_true")
     p_query.set_defaults(func=cmd_query)
 
+    p_banner = sub.add_parser(
+        "banner",
+        help="Print the HyperTerminal-style FOLIO splash (ASCII)",
+    )
+    p_banner.set_defaults(func=cmd_banner)
+
     p_status = sub.add_parser("status", help="Show CLI + index status")
     _add_out_arg(p_status)
+    p_status.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Skip the ASCII splash banner",
+    )
     p_status.set_defaults(func=cmd_status)
 
     p_install = sub.add_parser(

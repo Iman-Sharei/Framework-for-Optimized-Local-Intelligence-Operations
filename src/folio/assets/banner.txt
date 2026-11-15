@@ -1,0 +1,17 @@
+@@@@@@@@@@@   //@@@@@\\   @@@        @@@@@@@@@   //@@@@@\\
+@@@          @@/     \\@@  @@@           @@@     @@/     \\@@
+@@@          @@@     @@@  @@@           @@@     @@@     @@@
+@@@@@@@@     @@@     @@@  @@@           @@@     @@@     @@@
+@@@          @@@     @@@  @@@           @@@     @@@     @@@
+@@@          @@\\     //@@  @@@           @@@     @@\\     //@@
+@@@           \\@@@@@//   @@@@@@@@@  @@@@@@@@@   \\@@@@@//
+
+        LOCAL HYBRID RAG FOR AI ENGINEERING
+           MLOps · AI INFRA · LANGCHAIN
+        ELECTRONIC KNOWLEDGE RETRIEVAL SERVICE
+
+  folio bootstrap <ENTER>     Install the shared index.
+  folio query "…" <ENTER>     Ask one concrete question.
+  folio install --project     Wire Cursor / Claude / Codex.
+
+  Bounded answers. Local index. No curriculum dump.
