@@ -47,3 +47,15 @@ def test_refresh_updates_existing_assistant_files_only(tmp_path: Path):
 
 def test_unknown_platform_errors(tmp_path: Path):
     assert install(platform="nope", project_dir=tmp_path) == 2
+
+
+def test_install_platform_all_writes_each_assistant(tmp_path: Path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    assert install(platform="all", project=True, project_dir=project) == 0
+    assert (project / ".cursor" / "rules" / "folio.mdc").exists()
+    assert (project / ".agents" / "skills" / "folio" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "folio" / "SKILL.md").exists()
+    assert (project / ".codex" / "skills" / "folio" / "SKILL.md").exists()
+    assert (project / "AGENTS.md").exists()
+    assert (project / "CLAUDE.md").exists()

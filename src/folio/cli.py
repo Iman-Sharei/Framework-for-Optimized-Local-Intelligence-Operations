@@ -16,6 +16,7 @@ from .install import refresh_installed_files
 from .install import uninstall as uninstall_skill
 from .docs_nav import recommend_doc_urls_from_hits
 from .retrieve import apply_text_budget, format_context, hits_to_json_payload, retrieve
+from .skill_from import skill_from
 from .store import bm25_index_path
 from .sync import sync_sources
 
@@ -190,6 +191,16 @@ def cmd_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_skill_from(args: argparse.Namespace) -> int:
+    return skill_from(
+        Path(args.path),
+        name=args.name,
+        project=args.project,
+        project_dir=Path(args.dir).resolve() if args.dir else Path.cwd(),
+        platforms=args.platform,
+    )
+
+
 def cmd_docs_suggest(args: argparse.Namespace) -> int:
     """LangChain workflow helper: query docs-nav, print official URLs to open."""
     # Only migrate the default home index; an explicit --out is already isolated.
@@ -318,12 +329,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_install = sub.add_parser(
         "install",
-        help="Register skill/rules with an AI assistant (cursor|claude|codex|agents)",
+        help="Register skill/rules with an AI assistant (cursor|claude|codex|agents|all)",
     )
     p_install.add_argument(
         "--platform",
         default="cursor",
-        help="cursor|claude|codex|agents (default: cursor)",
+        help="cursor|claude|codex|agents|all (default: cursor)",
     )
     p_install.add_argument(
         "--project",
@@ -360,6 +371,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional source id (default: slug of the filename)",
     )
     p_add.set_defaults(func=cmd_add)
+
+    p_skill = sub.add_parser(
+        "skill-from",
+        help="Turn a local PDF/markdown/text book into an on-demand agent skill",
+    )
+    p_skill.add_argument("path", type=Path, help="Path to .pdf / .md / .txt")
+    p_skill.add_argument(
+        "--name",
+        default=None,
+        help="Skill folder name (default: slug of the filename)",
+    )
+    p_skill.add_argument(
+        "--platform",
+        default="agents",
+        help="agents|claude|codex|all (default: agents). Comma-separated ok.",
+    )
+    p_skill.add_argument(
+        "--project",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write into the project (default) or --no-project for home directory",
+    )
+    p_skill.add_argument("--dir", default=".", help="Project directory (default: cwd)")
+    p_skill.set_defaults(func=cmd_skill_from)
 
     p_docs = sub.add_parser(
         "docs-suggest",

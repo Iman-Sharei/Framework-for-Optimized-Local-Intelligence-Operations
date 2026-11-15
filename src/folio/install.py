@@ -238,6 +238,35 @@ def refresh_installed_files(project_dir: Path | None = None) -> int:
     return refreshed
 
 
+def _install_one(
+    platform: str,
+    *,
+    project: bool,
+    project_dir: Path,
+) -> int:
+    if platform == "cursor":
+        _cursor_install(project_dir)
+        if project:
+            _write_skill(project_dir / ".agents" / "skills" / "folio" / "SKILL.md")
+            # remove legacy skill dir
+            legacy_skill = project_dir / ".agents" / "skills" / "aieng"
+            if legacy_skill.exists():
+                shutil.rmtree(legacy_skill)
+                print(f"removed legacy {path_link(legacy_skill)}")
+            _agents_md_register(project_dir)
+        return 0
+
+    dst = _skill_dst_for(platform, project=project, project_dir=project_dir)
+    assert dst is not None
+    _write_skill(dst)
+
+    if platform == "claude":
+        _claude_md_register(project_dir if project else None, user_global=not project)
+    if platform == "agents" and project:
+        _agents_md_register(project_dir)
+    return 0
+
+
 def install(
     *,
     platform: str = "cursor",
@@ -249,35 +278,34 @@ def install(
     if platform == "skills":
         platform = "agents"
 
-    known = {"cursor", "claude", "codex", "agents"}
+    known = {"cursor", "claude", "codex", "agents", "all"}
     if platform not in known:
         print(
-            f"error: unknown platform '{platform}'. Choose from: {', '.join(sorted(known))}",
+            f"error: unknown platform '{platform}'. "
+            f"Choose from: cursor, claude, codex, agents, all",
             file=sys.stderr,
         )
         return 2
 
-    if platform == "cursor":
-        _cursor_install(project_dir)
-        if project:
-            _write_skill(project_dir / ".agents" / "skills" / "folio" / "SKILL.md")
-            # remove legacy skill dir
-            legacy_skill = project_dir / ".agents" / "skills" / "aieng"
-            if legacy_skill.exists():
-                shutil.rmtree(legacy_skill)
-                print(f"removed legacy {path_link(legacy_skill)}")
-            _agents_md_register(project_dir)
-        _print_install_next_steps()
-        return 0
-
-    dst = _skill_dst_for(platform, project=project, project_dir=project_dir)
-    assert dst is not None
-    _write_skill(dst)
-
-    if platform == "claude":
-        _claude_md_register(project_dir if project else None, user_global=not project)
-    if platform == "agents" and project:
-        _agents_md_register(project_dir)
+    targets = (
+        ["cursor", "claude", "codex", "agents"]
+        if platform == "all"
+        else [platform]
+    )
+    # Avoid double-writing .agents skill when both cursor --project and agents run.
+    wrote_agents_skill = False
+    for target in targets:
+        if target == "agents" and "cursor" in targets and project:
+            # cursor --project already writes .agents/skills/folio + AGENTS.md
+            wrote_agents_skill = True
+            continue
+        if target == "agents" and wrote_agents_skill:
+            continue
+        code = _install_one(target, project=project, project_dir=project_dir)
+        if code != 0:
+            return code
+        if target == "cursor" and project:
+            wrote_agents_skill = True
 
     _print_install_next_steps()
     return 0
@@ -291,11 +319,12 @@ def uninstall(
     purge: bool = False,
 ) -> int:
     project_dir = (project_dir or Path(".")).resolve()
-    platforms = (
-        [platform.lower()]
-        if platform
-        else ["cursor", "claude", "codex", "agents"]
-    )
+    if platform and platform.lower().strip() in {"all", "*"}:
+        platforms = ["cursor", "claude", "codex", "agents"]
+    elif platform:
+        platforms = [platform.lower().strip()]
+    else:
+        platforms = ["cursor", "claude", "codex", "agents"]
     for p in platforms:
         if p == "skills":
             p = "agents"
