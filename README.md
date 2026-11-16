@@ -9,7 +9,7 @@
 
               LOCAL HYBRID RAG FOR AI ENGINEERING
                   MLOps · AI INFRA · LANGCHAIN
-             ELECTRONIC KNOWLEDGE RETRIEVAL SERVICE
+                   KNOWLEDGE RETRIEVAL SERVICE
 </pre>
 
 <p align="center">
