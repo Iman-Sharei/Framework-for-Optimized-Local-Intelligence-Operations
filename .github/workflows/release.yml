@@ -1,45 +1,16 @@
 name: Release
 
+# Tag pushes must not rebuild folio-index.tar.gz. The old job downloaded the
+# previous release asset and uploaded that re-pack, which replaced a freshly
+# uploaded database with the previous bytes. Publish the index by hand:
+#   gh release upload <tag> dist/folio-index.tar.gz --clobber
 on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
-
 jobs:
-  publish-index-pack:
+  note:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install folio
-        run: |
-          python -m pip install -U pip
-          pip install -e .
-
-      - name: Pack index for release
-        run: |
-          set -euo pipefail
-          export FOLIO_HOME="${RUNNER_TEMP}/folio-home"
-          mkdir -p dist
-          # Bundled config ships sources: [] — this job does not re-embed.
-          # It downloads the current release asset and packs those bytes again.
-          # A real rebuild is scripts/rebuild_published_index.py, then a manual upload.
-          folio bootstrap --force
-          folio status
-          folio pack --dest dist/folio-index.tar.gz
-          test -s dist/folio-index.tar.gz
-
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/folio-index.tar.gz
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Index pack is not built here
+        run: echo "folio-index.tar.gz is uploaded separately and is not rebuilt from the previous release."

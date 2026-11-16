@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 
 from .config import ensure_data_dirs, resolve_out_dir, write_default_config
+from . import __version__ as cli_version
 from .ingest import index_build_metadata, index_version_now, ingest
 from .store import anonymize_index_copy
 from .sync import sync_sources
@@ -80,7 +81,7 @@ def public_manifest(data: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]
     build = index_build_metadata(cfg)
     return {
         "index_version": data.get("index_version") or index_version_now(),
-        "cli_version": data.get("cli_version"),
+        "cli_version": cli_version,
         "ingested_at": data.get("ingested_at"),
         "files": data.get("files"),
         "chunks": data.get("chunks"),
@@ -284,7 +285,13 @@ def _replace_tree(src: Path, dest: Path) -> None:
         shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
     if dest.exists():
         dest.rename(backup)
-    incoming.rename(dest)
+    try:
+        incoming.rename(dest)
+    except Exception:
+        # The live name was already moved aside. Put it back if the swap failed.
+        if backup.exists() and not dest.exists():
+            backup.rename(dest)
+        raise
     if backup.exists():
         shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
 
@@ -332,8 +339,8 @@ def migrate_legacy_index(legacy: Path | None = None) -> Path | None:
     if (dest / "manifest.json").exists():
         return dest
     # A non-empty home that is not already an index may hold unrelated files.
-    # Do not delete it to make room for a legacy move.
-    if dest.exists() and any(dest.iterdir()):
+    # model-cache is created by the CLI itself on startup, so it does not count.
+    if dest.exists() and any(p.name != "model-cache" for p in dest.iterdir()):
         print(
             f"[migrate] {dest} is not empty and has no manifest; "
             "leaving it in place"
@@ -354,7 +361,7 @@ def migrate_legacy_index(legacy: Path | None = None) -> Path | None:
     for src in candidates:
         if (src / "manifest.json").exists():
             dest.parent.mkdir(parents=True, exist_ok=True)
-            if dest.exists() and any(dest.iterdir()):
+            if dest.exists() and any(p.name != "model-cache" for p in dest.iterdir()):
                 print(
                     f"[migrate] {dest} is not empty and has no manifest; "
                     "leaving it in place"

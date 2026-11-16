@@ -76,6 +76,9 @@ def test_pack_and_bootstrap_roundtrip(
     assert hits
     assert all(hit.source_id == "" for hit in hits)
     assert any("RAG" in hit.text or "RRF" in hit.text for hit in hits)
+    # Deleted SQLite pages must not keep the old "demo:" chunk ids.
+    sqlite = (other / "chroma" / "chroma.sqlite3").read_bytes()
+    assert b"demo:" not in sqlite
 
 
 def test_release_url_falls_back_to_bundled_when_empty():

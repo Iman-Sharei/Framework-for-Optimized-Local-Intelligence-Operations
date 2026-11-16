@@ -285,6 +285,10 @@ def anonymize_bm25_file(path: Path, *, keep_headings: bool) -> None:
     ids = list(data.get("ids") or [])
     texts = list(data.get("texts") or [])
     metas = list(data.get("metadatas") or [])
+    if len(texts) != len(ids) or len(metas) != len(ids):
+        raise RuntimeError(
+            f"BM25 lists disagree (ids={len(ids)} texts={len(texts)} metas={len(metas)}); refusing to pack"
+        )
     new_ids = [opaque_chunk_id(str(i)) for i in ids]
     new_metas = [
         redact_chunk_metadata(m if isinstance(m, dict) else {}, new_id, keep_headings=keep_headings)
@@ -305,30 +309,69 @@ def anonymize_chroma_dir(chroma_dir: Path, collection_name: str, *, keep_heading
     """
     client = _chroma_client(chroma_dir)
     collection = client.get_collection(name=collection_name)
-    data = collection.get(include=["documents", "metadatas", "embeddings"])
-    old_ids = list(data.get("ids") or [])
-    if not old_ids:
+    total = int(collection.count())
+    if total == 0:
         return
-    documents = list(data.get("documents") or [])
-    metadatas = list(data.get("metadatas") or [])
-    embeddings = data.get("embeddings")
-    if embeddings is None:
-        raise RuntimeError("Chroma did not return embeddings; refusing to pack without vectors")
-    new_ids = [opaque_chunk_id(str(i)) for i in old_ids]
+    # Page the read. One unbounded get() can stop early and the pack would
+    # silently drop the rest of the vectors.
+    page = 256
+    offset = 0
+    rows: list[tuple[str, str, dict, Any]] = []
+    while offset < total:
+        data = collection.get(
+            include=["documents", "metadatas", "embeddings"],
+            limit=page,
+            offset=offset,
+        )
+        ids = list(data.get("ids") or [])
+        if not ids:
+            break
+        documents = list(data.get("documents") or [])
+        metadatas = list(data.get("metadatas") or [])
+        embeddings = data.get("embeddings")
+        if embeddings is None or len(documents) != len(ids) or len(metadatas) != len(ids):
+            raise RuntimeError("Chroma page was incomplete; refusing to pack without vectors")
+        for i, doc_id in enumerate(ids):
+            rows.append((str(doc_id), documents[i], metadatas[i] or {}, embeddings[i]))
+        offset += len(ids)
+    if len(rows) != total:
+        raise RuntimeError(f"Chroma get returned {len(rows)} of {total}; refusing to pack")
+    space = "cosine"
+    try:
+        meta = collection.metadata or {}
+        space = str(meta.get("hnsw:space") or "cosine")
+    except Exception:
+        space = "cosine"
+    # Close the old database before replacing it. Delete+VACUUM keeps the old
+    # ids inside segment blobs, so the published directory is a new database.
+    del collection
+    del client
+    fresh = chroma_dir.parent / f"{chroma_dir.name}-redacted"
+    if fresh.exists():
+        shutil.rmtree(fresh)
+    new_client = _chroma_client(fresh)
+    new_collection = new_client.get_or_create_collection(
+        name=collection_name,
+        metadata={"hnsw:space": space},
+    )
+    new_ids = [opaque_chunk_id(row[0]) for row in rows]
     new_metas = [
-        redact_chunk_metadata(m if isinstance(m, dict) else {}, new_id, keep_headings=keep_headings)
-        for m, new_id in zip(metadatas, new_ids)
+        redact_chunk_metadata(row[2] if isinstance(row[2], dict) else {}, new_id, keep_headings=keep_headings)
+        for row, new_id in zip(rows, new_ids)
     ]
-    collection.delete(ids=old_ids)
     batch = 64
     for start in range(0, len(new_ids), batch):
         end = start + batch
-        collection.add(
+        new_collection.add(
             ids=new_ids[start:end],
-            documents=documents[start:end],
+            documents=[row[1] for row in rows[start:end]],
             metadatas=new_metas[start:end],
-            embeddings=list(embeddings[start:end]),
+            embeddings=[row[3] for row in rows[start:end]],
         )
+    del new_collection
+    del new_client
+    shutil.rmtree(chroma_dir)
+    fresh.rename(chroma_dir)
 
 
 def anonymize_index_copy(root: Path, collection_name: str, *, keep_headings: bool) -> None:

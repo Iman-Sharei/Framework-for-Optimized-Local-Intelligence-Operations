@@ -62,12 +62,11 @@ Upload only when you mean to replace the release asset. This repo does not do th
 # Replace the asset on an existing tag
 gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
 
-# Or publish a new tag. The tag workflow re-downloads the current release
-# asset and packs those bytes again. It does not re-embed sources.local.yaml.
-# Upload the tarball you just built onto the tag you intend to ship.
+# A version tag publishes the Python package. It does not build or replace
+# folio-index.tar.gz. Create the release, then upload the tarball you packed.
 git tag vX.Y.Z
 git push origin vX.Y.Z
-gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
+gh release create vX.Y.Z dist/folio-index.tar.gz --title vX.Y.Z --repo Iman-Sharei/folio
 ```
 
 Users install that file with `folio bootstrap` or `folio update`.

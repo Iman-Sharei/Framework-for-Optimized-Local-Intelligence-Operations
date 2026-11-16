@@ -56,7 +56,7 @@ The usual workarounds don't help:
 
 **folio solves this with a local hybrid index your assistant queries on demand.**
 
-📏 **Default print budget: 2 000 tokens** — retrieval still ranks the full index; only what is printed is capped. That keeps assistant context lean vs pasting long docs.
+📏 **Default print budget: about 2 000 tokens** — a 4-characters-per-token cap on what is printed. Retrieval still searches the index; only the print is capped.
 
 <br clear="all">
 
@@ -74,18 +74,23 @@ Your agent loads only the capped hits, then decides. No curriculum dump. No nami
 
 ## 📥 Install
 
+Current package release: **0.4.7** (`folio-cli` on PyPI).
+
 ```bash
 uv tool install folio-cli
 folio --help
 ```
 
-Upgrade later:
+Upgrade an existing install, then refresh the local index:
 
 ```bash
 uv tool upgrade folio-cli
+# or: pip install -U folio-cli
+# or: pipx upgrade folio-cli
+folio update
 ```
 
-More: [uv tool docs](https://docs.astral.sh/uv/guides/tools/) · [PyPI folio-cli](https://pypi.org/project/folio-cli/)
+`folio update` downloads the published index again. It does not change the program version. More: [uv tool docs](https://docs.astral.sh/uv/guides/tools/) · [PyPI folio-cli](https://pypi.org/project/folio-cli/)
 
 ---
 
@@ -106,17 +111,18 @@ folio update
 
 Pack: [`folio-index.tar.gz`](https://github.com/Iman-Sharei/folio/releases/latest/download/folio-index.tar.gz)
 
-### How the vectors are made
+### How a query is answered
 
-A published pack does not include a source catalog. `folio sources` prints the build settings stored in the installed manifest: model, window, pooling, and chunk sizes. It does not print source names.
-
-Vectors are Chroma's ONNX MiniLM-L6-v2 embeddings (256-token model). Passages longer than 200 tokens are split into windows of 200 with a 40-token overlap, embedded, and mean-pooled so the tail is not dropped. The same chunks are scored with BM25. Default chunk settings: `max_chars` 1200, `overlap_chars` 150, `min_chars` 80, `max_tokens` 200, `overlap_tokens` 40.
+BM25 and a dense search each return a candidate set (default 20). The lists are merged with reciprocal rank fusion. If the best dense cosine similarity is below **0.20**, both sets are widened. Older configs that still say `0.012` are treated as 0.20, because that number was a rank-fusion cutoff and never meant "weak similarity." `--budget` only limits the printed text (default 2000, about 8000 characters).
 
 ```bash
+folio query "when should retrieval widen the candidate set?" --budget 2000
 folio sources
 ```
 
-The chunk text is what retrieval returns. Hiding names does not hide that text.
+`folio sources` prints the embedding model, window, pooling, and chunk settings recorded in the installed manifest. It does not print source names. A published pack has no source catalog. `folio pack` rewrites ids so file paths and source ids are not in the tarball, and it writes `sources: []` into the packed config. The chunk text itself stays in the database, so the passages are still readable.
+
+Vectors are Chroma's ONNX MiniLM-L6-v2 embeddings (256-token model). Passages longer than 200 tokens are split into windows of 200 with a 40-token overlap, embedded, and mean-pooled. The same chunks are scored with BM25. Default chunk settings: `max_chars` 1200, `overlap_chars` 150, `min_chars` 80, `max_tokens` 200, `overlap_tokens` 40.
 
 ---
 
@@ -185,7 +191,7 @@ folio skill-from <path> [--name NAME] [--platform agents|claude|codex|all]
 folio docs-suggest "<LangChain task>"
 ```
 
-`folio query` still searches the **full** index. `--budget` only caps what is printed (default **2000** tokens).
+`folio query` searches the index with BM25 and dense retrieval, then prints at most `--budget` tokens (default **2000**). `folio pack` publishes a redacted tarball; see [docs/maintainer.md](docs/maintainer.md).
 
 ---
 
@@ -195,13 +201,14 @@ Users do **not** add documents. Building and publishing the shared database is a
 
 ```bash
 folio add /path/to/file.pdf|.md|.txt|.json
-folio pack
-cp "$(ls -t dist/folio-index-*.tar.gz | head -1)" dist/folio-index.tar.gz
-TAG=$(gh release view --repo Iman-Sharei/folio --json tagName -q .tagName)
-gh release upload "$TAG" dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
+folio pack --dest dist/folio-index.tar.gz
 ```
 
-Publish the program by tagging `vX.Y.Z`. That uses the GitHub Environment [`pypi`](https://github.com/Iman-Sharei/folio/settings/environments) and a [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/) for [`folio-cli`](https://pypi.org/project/folio-cli/).
+Tagging `vX.Y.Z` publishes the program to PyPI through the [`pypi`](https://github.com/Iman-Sharei/folio/settings/environments) environment and Trusted Publishing. That tag does **not** rebuild or replace `folio-index.tar.gz`. Upload the tarball you just packed:
+
+```bash
+gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
+```
 
 ```bash
 uv sync && uv run pytest -q

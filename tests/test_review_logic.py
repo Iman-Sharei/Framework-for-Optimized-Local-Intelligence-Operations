@@ -641,6 +641,45 @@ def test_failed_pack_replace_keeps_the_previous_index(tmp_path: Path, monkeypatc
     assert real_copytree
 
 
+def test_replace_tree_restores_live_dir_when_swap_fails(tmp_path: Path, monkeypatch):
+    from folio.distribute import _replace_tree
+
+    live = tmp_path / "chroma"
+    live.mkdir()
+    (live / "marker.txt").write_text("previous", encoding="utf-8")
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "new.txt").write_text("new", encoding="utf-8")
+
+    real_rename = Path.rename
+    calls = {"n": 0}
+
+    def flaky(self, target):
+        calls["n"] += 1
+        # First rename moves the live tree aside. The second, the incoming
+        # swap, fails and must not leave the live name missing.
+        if calls["n"] == 2:
+            raise OSError("rename failed")
+        return real_rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", flaky)
+    with pytest.raises(OSError, match="rename failed"):
+        _replace_tree(src, live)
+    assert (live / "marker.txt").read_text(encoding="utf-8") == "previous"
+
+
+def test_anonymize_bm25_rejects_mismatched_lists(tmp_path: Path):
+    from folio.store import anonymize_bm25_file
+
+    path = tmp_path / "index.json"
+    path.write_text(
+        json.dumps({"ids": ["a", "b"], "texts": ["only one"], "metadatas": [{}, {}]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="disagree"):
+        anonymize_bm25_file(path, keep_headings=False)
+
+
 def test_bm25_json_helper_matches_public_path(tmp_path: Path):
     """Guard against the private helper drifting from the path users are told about."""
     legacy = tmp_path / "index.pkl"
