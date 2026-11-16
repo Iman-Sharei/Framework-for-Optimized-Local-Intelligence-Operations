@@ -215,7 +215,3 @@ Publish the program by tagging `vX.Y.Z`. That uses the GitHub Environment [`pypi
 - 🏷️ [Releases & index pack](https://github.com/Iman-Sharei/folio/releases)
 - 🐛 [Issues](https://github.com/Iman-Sharei/folio/issues)
 - ⚖️ [Apache-2.0 license](https://github.com/Iman-Sharei/folio/blob/main/LICENSE)
-
-<p align="center">
-  <img src="docs/assets/folio-og-card.jpg" alt="folio social card" width="640">
-</p>
