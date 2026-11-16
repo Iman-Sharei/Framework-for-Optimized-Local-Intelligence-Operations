@@ -222,11 +222,11 @@ pause "Signed in to PyPI?"
 stage "GitHub Environment: pypi"
 say "Trusted Publishing expects a GitHub Environment named exactly: pypi"
 if command -v gh >/dev/null 2>&1 \
-  && gh api repos/Iman-Sharei/folio/environments/pypi >/dev/null 2>&1; then
-  say "GitHub Environment pypi is already configured on Iman-Sharei/folio."
+  && gh api repos/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/environments/pypi >/dev/null 2>&1; then
+  say "GitHub Environment pypi is already configured on Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations."
   note "Workflow publish-pypi.yml uses environment: pypi + id-token: write."
 else
-  open_url "https://github.com/Iman-Sharei/folio/settings/environments"
+  open_url "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/settings/environments"
   step "Click New environment → name it pypi → Configure environment → Save."
   note "No required reviewers needed for the first publish."
   pause "Environment pypi exists?"

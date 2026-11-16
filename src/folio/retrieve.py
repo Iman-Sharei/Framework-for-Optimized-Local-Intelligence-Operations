@@ -215,11 +215,16 @@ def _cross_encoder_rerank(
 
 def chars_for_token_budget(token_budget: int) -> int:
     """Approx chars for a token cap (same 4 chars/token heuristic as compact CLIs)."""
-    return max(int(token_budget), 1) * 4
+    budget = int(token_budget)
+    if budget <= 0:
+        return 0
+    return budget * 4
 
 
 def apply_text_budget(text: str, *, token_budget: int) -> str:
     limit = chars_for_token_budget(token_budget)
+    if limit <= 0:
+        return ""
     if len(text) <= limit:
         return text
     note = f"\n… (truncated to ~{token_budget} tokens; raise --budget for more)\n"

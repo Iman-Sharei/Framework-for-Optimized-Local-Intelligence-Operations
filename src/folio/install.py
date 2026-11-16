@@ -9,9 +9,9 @@ from .term import path_link, url_link
 
 TOOL = "folio"
 _PYPI_URL = "https://pypi.org/project/folio-cli/"
-_REPO_URL = "https://github.com/Iman-Sharei/folio"
-_RELEASES_URL = "https://github.com/Iman-Sharei/folio/releases/latest"
-_README_URL = "https://github.com/Iman-Sharei/folio#readme"
+_REPO_URL = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations"
+_RELEASES_URL = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/releases/latest"
+_README_URL = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations#readme"
 _CURSOR_RULE_PATH = Path(".cursor") / "rules" / "folio.mdc"
 _AGENTS_MD_MARKER = "# folio"
 
@@ -331,6 +331,9 @@ def uninstall(
             p = "agents"
         if p == "cursor":
             _cursor_uninstall(project_dir)
+            # install --platform cursor (no --project) writes under $HOME.
+            if not project:
+                _cursor_uninstall(Path.home())
             for name in ("folio", "aieng"):
                 skill = project_dir / ".agents" / "skills" / name
                 if skill.exists():

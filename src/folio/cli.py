@@ -3,8 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import warnings
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from pathlib import Path
+
+# Chroma pulls posthog; on Python 3.14 that dependency emits a SyntaxWarning.
+warnings.filterwarnings(
+    "ignore",
+    category=SyntaxWarning,
+    module=r"posthog(\.|$)",
+)
 
 from . import __version__
 from .config import ensure_data_dirs, load_config, resolve_out_dir, write_default_config

@@ -19,6 +19,7 @@
 <h1 align="center">📚 folio</h1>
 
 <p align="center">
+  <strong>folio</strong> = <em>Framework for Optimized Local Intelligence Operations</em><br>
   <strong>Local hybrid RAG</strong> for AI engineering · MLOps · AI infra.<br>
   Your assistant asks a short question → gets a <strong>budget-capped</strong> answer from a shared index on your machine.
 </p>
@@ -26,9 +27,9 @@
 <p align="center">
   <a href="https://pypi.org/project/folio-cli/"><img src="https://img.shields.io/pypi/v/folio-cli.svg" alt="PyPI"></a>
   <a href="https://pypi.org/project/folio-cli/"><img src="https://img.shields.io/pypi/pyversions/folio-cli.svg" alt="Python"></a>
-  <a href="https://github.com/Iman-Sharei/folio/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Iman-Sharei/folio.svg" alt="License"></a>
-  <a href="https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml"><img src="https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/Iman-Sharei/folio/stargazers"><img src="https://img.shields.io/github/stars/Iman-Sharei/folio?style=social" alt="Stars"></a>
+  <a href="https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations.svg" alt="License"></a>
+  <a href="https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/actions/workflows/ci.yml"><img src="https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/stargazers"><img src="https://img.shields.io/github/stars/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations?style=social" alt="Stars"></a>
 </p>
 
 <p align="center">
@@ -39,7 +40,7 @@
   <a href="#-commands">Commands</a>
 </p>
 
-> 📦 PyPI: [`folio-cli`](https://pypi.org/project/folio-cli/) · CLI: **`folio`** · Index: `~/.folio` · [Releases](https://github.com/Iman-Sharei/folio/releases/latest)
+> 📦 PyPI: [`folio-cli`](https://pypi.org/project/folio-cli/) · CLI: **`folio`** · Index: `~/.folio` · [Releases](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/releases/latest)
 
 ---
 
@@ -74,7 +75,7 @@ Your agent loads only the capped hits, then decides. No curriculum dump. No nami
 
 ## 📥 Install
 
-Current package release: **0.4.7** (`folio-cli` on PyPI).
+Current package release: **0.4.8** (`folio-cli` on PyPI).
 
 ```bash
 uv tool install folio-cli
@@ -109,7 +110,7 @@ folio status
 folio update
 ```
 
-Pack: [`folio-index.tar.gz`](https://github.com/Iman-Sharei/folio/releases/latest/download/folio-index.tar.gz)
+Pack: [`folio-index.tar.gz`](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/releases/latest/download/folio-index.tar.gz)
 
 ### How a query is answered
 
@@ -204,23 +205,23 @@ folio add /path/to/file.pdf|.md|.txt|.json
 folio pack --dest dist/folio-index.tar.gz
 ```
 
-Tagging `vX.Y.Z` publishes the program to PyPI through the [`pypi`](https://github.com/Iman-Sharei/folio/settings/environments) environment and Trusted Publishing. That tag does **not** rebuild or replace `folio-index.tar.gz`. Upload the tarball you just packed:
+Tagging `vX.Y.Z` publishes the program to PyPI through the [`pypi`](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/settings/environments) environment and Trusted Publishing. That tag does **not** rebuild or replace `folio-index.tar.gz`. Upload the tarball you just packed:
 
 ```bash
-gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
+gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations
 ```
 
 ```bash
 uv sync && uv run pytest -q
 ```
 
-CI: [GitHub Actions](https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml)
+CI: [GitHub Actions](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/actions/workflows/ci.yml)
 ---
 
 ## 🔗 Links
 
 - 📦 [PyPI — folio-cli](https://pypi.org/project/folio-cli/)
-- 🐙 [GitHub — Iman-Sharei/folio](https://github.com/Iman-Sharei/folio)
-- 🏷️ [Releases & index pack](https://github.com/Iman-Sharei/folio/releases)
-- 🐛 [Issues](https://github.com/Iman-Sharei/folio/issues)
-- ⚖️ [Apache-2.0 license](https://github.com/Iman-Sharei/folio/blob/main/LICENSE)
+- 🐙 [GitHub — Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations)
+- 🏷️ [Releases & index pack](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/releases)
+- 🐛 [Issues](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/issues)
+- ⚖️ [Apache-2.0 license](https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/blob/main/LICENSE)

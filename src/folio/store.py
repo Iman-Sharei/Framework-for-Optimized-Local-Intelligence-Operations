@@ -6,6 +6,7 @@ import os
 import pickle
 import re
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -47,14 +48,70 @@ class _RestrictedBm25Unpickler(pickle.Unpickler):
         return super().find_class(module, name)
 
 
+def _path_is_writable(path: Path) -> bool:
+    """True when we can create and delete a probe file under ``path``."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / ".folio_write_probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def _writable_chroma_dir(chroma_dir: Path) -> Path:
+    """Return a Chroma path that SQLite can open for write (WAL / locks).
+
+    Agent sandboxes often mount ``~/.folio`` read-only. Chroma still commits
+    short transactions on query, so we mirror into a temp directory keyed by
+    the source sqlite mtime/size and reuse that mirror across calls.
+    """
+    chroma_dir = chroma_dir.expanduser().resolve()
+    sqlite = chroma_dir / "chroma.sqlite3"
+    if _path_is_writable(chroma_dir) and (
+        not sqlite.exists() or os.access(sqlite, os.W_OK)
+    ):
+        return chroma_dir
+    if not chroma_dir.exists():
+        return chroma_dir
+    stamp = "missing"
+    if sqlite.exists():
+        st = sqlite.stat()
+        stamp = f"{st.st_mtime_ns}:{st.st_size}"
+    key = hashlib.sha256(f"{chroma_dir}:{stamp}".encode("utf-8")).hexdigest()[:16]
+    dest = Path(tempfile.gettempdir()) / f"folio-chroma-mirror-{key}"
+    marker = dest / ".folio_mirror_src"
+    src_text = str(chroma_dir)
+    if dest.exists() and marker.is_file() and marker.read_text(encoding="utf-8") == src_text:
+        return dest
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(chroma_dir, dest)
+    for path in [dest, *dest.rglob("*")]:
+        try:
+            if path.is_dir():
+                path.chmod(0o700)
+            elif path.is_file():
+                path.chmod(0o600)
+        except OSError:
+            continue
+    marker.write_text(src_text, encoding="utf-8")
+    return dest
+
+
 def _ensure_local_chroma_cache(model_cache_dir: Path | None = None) -> Path:
     """Keep ONNX model cache under the folio index home (sandbox-friendly).
 
     Chroma binds ``ONNXMiniLM_L6_V2.DOWNLOAD_PATH`` at import time from Path.home(),
     so we rewrite that class attribute to a folio-local directory.
     """
-    cache = (model_cache_dir or Path.home() / ".folio" / "model-cache").resolve()
-    cache.mkdir(parents=True, exist_ok=True)
+    preferred = (model_cache_dir or Path.home() / ".folio" / "model-cache").resolve()
+    if _path_is_writable(preferred):
+        cache = preferred
+    else:
+        cache = (Path(tempfile.gettempdir()) / "folio-model-cache").resolve()
+        cache.mkdir(parents=True, exist_ok=True)
     # Do NOT rewrite $HOME — that breaks Path.home() for the whole process.
     os.environ["CHROMA_CACHE_DIR"] = str(cache)
     os.environ["XDG_CACHE_HOME"] = str(cache)
@@ -192,7 +249,8 @@ def get_embedding_fn(model_cache_dir: Path | None = None) -> DefaultEmbeddingFun
 
 def _chroma_client(chroma_dir: Path) -> chromadb.PersistentClient:
     # Telemetry writes hit the same SQLite file; disable to keep query usable
-    # under readonly / sandboxed mounts.
+    # under readonly / sandboxed mounts. When the home index is read-only,
+    # get_collection(create=False) mirrors chroma into a temp dir first.
     from chromadb.config import Settings
 
     settings = Settings(
@@ -207,7 +265,10 @@ def _chroma_client(chroma_dir: Path) -> chromadb.PersistentClient:
 def get_collection(cfg: dict[str, Any], *, create: bool = True) -> Collection:
     cache = Path(cfg["paths"]["model_cache_dir"])
     _ensure_local_chroma_cache(cache)
-    client = _chroma_client(Path(cfg["paths"]["chroma_dir"]))
+    chroma_dir = Path(cfg["paths"]["chroma_dir"])
+    if not create:
+        chroma_dir = _writable_chroma_dir(chroma_dir)
+    client = _chroma_client(chroma_dir)
     emb = get_embedding_fn(cache)
     name = cfg["collection"]["name"]
     if not create:

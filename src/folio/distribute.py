@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import shutil
 import sys
 import tarfile
@@ -13,7 +15,7 @@ from typing import Any
 
 import yaml
 
-from .config import ensure_data_dirs, resolve_out_dir, write_default_config
+from .config import default_config_text, ensure_data_dirs, resolve_out_dir, write_default_config
 from . import __version__ as cli_version
 from .ingest import index_build_metadata, index_version_now, ingest
 from .store import anonymize_index_copy
@@ -25,20 +27,41 @@ _PACK_MEMBERS = ("chroma", "bm25", "manifest.json", "config.yaml")
 _PACK_TOP = frozenset(_PACK_MEMBERS)
 
 
+def _bundled_release() -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(default_config_text()) or {}
+        release = data.get("release") or {}
+        return release if isinstance(release, dict) else {}
+    except Exception:
+        return {}
+
+
 def _release_url(cfg: dict[str, Any]) -> str:
+    """Resolve the index pack URL.
+
+    Order: ``FOLIO_INDEX_URL`` → config ``release.index_url`` → bundled default.
+    After a successful bootstrap we rewrite the installed config to the URL we
+    actually fetched, so a pack cannot redirect the next ``folio update``.
+    """
+    env = (os.environ.get("FOLIO_INDEX_URL") or "").strip()
+    if env:
+        return env
     release = cfg.get("release") or {}
     url = (release.get("index_url") or "").strip()
     if url:
         return url
-    # Local ~/.folio/config.yaml may have an empty placeholder; fall back to bundle.
-    try:
-        from .config import default_config_text
-        import yaml
+    return (_bundled_release().get("index_url") or "").strip()
 
-        bundled = yaml.safe_load(default_config_text()) or {}
-        return ((bundled.get("release") or {}).get("index_url") or "").strip()
-    except Exception:
-        return ""
+
+def _expected_index_sha256(cfg: dict[str, Any]) -> str:
+    env = (os.environ.get("FOLIO_INDEX_SHA256") or "").strip().lower()
+    if env:
+        return env
+    release = cfg.get("release") or {}
+    value = (release.get("index_sha256") or "").strip().lower()
+    if value:
+        return value
+    return (_bundled_release().get("index_sha256") or "").strip().lower()
 
 
 def _require_https_url(url: str) -> str:
@@ -52,6 +75,65 @@ def _require_https_url(url: str) -> str:
             "Use https://… or pass a local --archive path."
         )
     return url
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_index_sha256(path: Path, expected: str) -> None:
+    if not expected:
+        return
+    actual = _sha256_file(path)
+    if actual != expected:
+        raise RuntimeError(
+            f"Index pack sha256 mismatch (expected {expected[:12]}…, got {actual[:12]}…). "
+            "Refusing to install. Set FOLIO_INDEX_SHA256 or release.index_sha256 to override."
+        )
+
+
+def _fetch_companion_sha256(url: str) -> str:
+    """Optional ``<url>.sha256`` sidecar published next to the pack."""
+    sidecar = url + ".sha256"
+    try:
+        request = urllib.request.Request(sidecar, headers={"User-Agent": "folio-cli"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            text = response.read(4096).decode("utf-8", errors="replace").strip()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return ""
+    if not text:
+        return ""
+    # Accept "hash", "hash  filename", or "hash *filename"
+    token = text.split()[0].strip().lower()
+    if len(token) == 64 and all(c in "0123456789abcdef" for c in token):
+        return token
+    return ""
+
+
+def _lock_installed_release(out: Path, *, url: str, sha256: str = "") -> None:
+    """Rewrite installed config so the next update uses the URL we just trusted."""
+    path = out / "config.yaml"
+    if path.exists():
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    else:
+        data = yaml.safe_load(default_config_text()) or {}
+    if not isinstance(data, dict):
+        data = {}
+    release = data.setdefault("release", {})
+    if not isinstance(release, dict):
+        release = {}
+        data["release"] = release
+    release["index_url"] = url
+    if sha256:
+        release["index_sha256"] = sha256
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
 
 def _safe_tar_members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
@@ -188,8 +270,14 @@ def bootstrap_index(
         src = archive.expanduser().resolve()
         if not src.exists():
             raise FileNotFoundError(src)
+        expected = _expected_index_sha256(cfg)
+        _verify_index_sha256(src, expected)
         print(f"📦 [bootstrap] extracting {path_link(src)} → {path_link(out)}")
         _extract_into_out(src, out)
+        # Local archive installs keep the bundled download URL for later updates.
+        bundled_url = (_bundled_release().get("index_url") or "").strip()
+        if bundled_url:
+            _lock_installed_release(out, url=bundled_url, sha256=expected)
         print(f"✅ [bootstrap] ready at {path_link(out)}")
         return out
 
@@ -201,12 +289,17 @@ def bootstrap_index(
         )
 
     resolved = _require_https_url(resolved)
+    expected = _expected_index_sha256(cfg)
+    if not expected:
+        expected = _fetch_companion_sha256(resolved)
 
     with tempfile.TemporaryDirectory(prefix="folio-bootstrap-") as tmp:
         tmp_path = Path(tmp) / "folio-index.tar.gz"
         print(f"⬇️  [bootstrap] downloading {url_link(resolved)}")
         _download(resolved, tmp_path)
+        _verify_index_sha256(tmp_path, expected)
         _extract_into_out(tmp_path, out)
+        _lock_installed_release(out, url=resolved, sha256=expected)
 
     print(f"✅ [bootstrap] ready at {path_link(out)}")
     return out

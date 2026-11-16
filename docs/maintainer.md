@@ -60,16 +60,20 @@ Upload only when you mean to replace the release asset. This repo does not do th
 
 ```bash
 # Replace the asset on an existing tag
-gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/folio
+gh release upload vX.Y.Z dist/folio-index.tar.gz --clobber --repo Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations
+
+# Optional integrity sidecar (folio bootstrap verifies when present)
+sha256sum dist/folio-index.tar.gz | awk '{print $1}' > dist/folio-index.tar.gz.sha256
+gh release upload vX.Y.Z dist/folio-index.tar.gz.sha256 --clobber --repo Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations
 
 # A version tag publishes the Python package. It does not build or replace
 # folio-index.tar.gz. Create the release, then upload the tarball you packed.
 git tag vX.Y.Z
 git push origin vX.Y.Z
-gh release create vX.Y.Z dist/folio-index.tar.gz --title vX.Y.Z --repo Iman-Sharei/folio
+gh release create vX.Y.Z dist/folio-index.tar.gz --title vX.Y.Z --repo Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations
 ```
 
-Users install that file with `folio bootstrap` or `folio update`.
+Users install that file with `folio bootstrap` or `folio update`. After install, folio rewrites `~/.folio/config.yaml` so `release.index_url` matches the URL that was actually downloaded (pack configs cannot redirect the next update). Override with `--url`, `FOLIO_INDEX_URL`, or `FOLIO_INDEX_SHA256`.
 
 ## What a published pack still contains
 

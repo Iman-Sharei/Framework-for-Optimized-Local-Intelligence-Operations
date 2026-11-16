@@ -5,8 +5,12 @@
 sources: []
 
 release:
-  # Filled after first GitHub Release upload of folio-index.tar.gz
-  index_url: "https://github.com/Iman-Sharei/folio/releases/latest/download/folio-index.tar.gz"
+  # Pack URL. Bootstrap rewrites ~/.folio/config.yaml to this URL after install
+  # so a published pack cannot redirect the next `folio update`.
+  index_url: "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/releases/latest/download/folio-index.tar.gz"
+  # Optional pin. Prefer publishing folio-index.tar.gz.sha256 next to the pack,
+  # or set FOLIO_INDEX_SHA256. When empty, bootstrap still tries the sidecar.
+  index_sha256: ""
 
 paths:
   sources_dir: data/sources

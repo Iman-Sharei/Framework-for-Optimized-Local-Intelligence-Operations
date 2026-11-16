@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # PyPI distribution name (plain "folio" is taken by an unrelated static-site tool).
 # Import package + CLI command remain `folio`.
 name = "folio-cli"
-version = "0.4.7"
+version = "0.4.8"
 description = "Local hybrid RAG for AI engineering / MLOps / infra decisions — bounded CLI output for any assistant"
 readme = "README.md"
 license = "Apache-2.0"
@@ -48,10 +48,10 @@ rerank = ["sentence-transformers>=3.3.0,<6"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0"]
 
 [project.urls]
-Homepage = "https://github.com/Iman-Sharei/folio"
-Repository = "https://github.com/Iman-Sharei/folio"
-Issues = "https://github.com/Iman-Sharei/folio/issues"
-Changelog = "https://github.com/Iman-Sharei/folio/releases"
+Homepage = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations"
+Repository = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations"
+Issues = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/issues"
+Changelog = "https://github.com/Iman-Sharei/Framework-for-Optimized-Local-Intelligence-Operations/releases"
 
 [project.scripts]
 folio = "folio.cli:main"
