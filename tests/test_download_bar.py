@@ -14,19 +14,40 @@ def test_fmt_bytes_and_eta():
     assert _fmt_eta(None) == "--:--"
 
 
-def test_download_bar_draws_percent_and_closes(monkeypatch):
+def test_download_bar_stays_on_one_line(monkeypatch):
     buf = io.StringIO()
-    # Force TTY-style redraws.
     buf.isatty = lambda: True  # type: ignore[method-assign]
+    monkeypatch.setattr("folio.term._term_cols", lambda: 80)
+
     bar = DownloadBar(1000, label="pack", width=10, stream=buf)
     bar.update(250)
-    bar.update(750)
+    bar.update(250)
+    bar.update(500)
+    mid = buf.getvalue()
+    # While updating: clear+CR only — no newline spam.
+    assert mid.count("\n") == 0
+    assert "\033[2K\r" in mid
+    assert "[" in mid and "]" in mid
+
     bar.close()
     text = buf.getvalue()
-    assert "pack" in text
-    assert "█" in text
-    assert "100.0%" in text
+    # Exactly one newline — the final close.
+    assert text.count("\n") == 1
+    assert "100%" in text or "100 %" in text or "100%" in text.replace(" ", "")
     assert "done" in text
+
+
+def test_download_bar_line_never_exceeds_terminal_width(monkeypatch):
+    buf = io.StringIO()
+    buf.isatty = lambda: True  # type: ignore[method-assign]
+    monkeypatch.setattr("folio.term._term_cols", lambda: 50)
+
+    bar = DownloadBar(10**9, label="folio-index.tar.gz-very-long-name", width=30, stream=buf)
+    bar.update(10**8)
+    # Strip ANSI / CR and measure visible payload.
+    raw = buf.getvalue().split("\r")[-1]
+    visible = raw.replace("\033[2K", "")
+    assert len(visible) <= 50
 
 
 def test_download_writes_file_and_reports_progress(tmp_path: Path, monkeypatch):
@@ -54,7 +75,6 @@ def test_download_writes_file_and_reports_progress(tmp_path: Path, monkeypatch):
         lambda *a, **k: FakeResp(),
     )
     dest = tmp_path / "pack.tar.gz"
-    # Quiet CI-style summary path
     monkeypatch.setenv("FOLIO_NO_PROGRESS", "1")
     _download("https://example.com/pack.tar.gz", dest, attempts=1)
     assert dest.read_bytes() == payload

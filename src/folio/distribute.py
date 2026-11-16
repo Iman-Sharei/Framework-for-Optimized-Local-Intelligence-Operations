@@ -182,10 +182,9 @@ def _download(url: str, dest: Path, *, attempts: int = 4) -> None:
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
             last = exc
             if bar is not None:
-                # Finish the line so retries don't overwrite a half-drawn bar.
+                # Close the single progress line cleanly before retrying.
                 try:
-                    sys.stderr.write("\n")
-                    sys.stderr.flush()
+                    bar.close()
                 except Exception:
                     pass
             dest.unlink(missing_ok=True)
