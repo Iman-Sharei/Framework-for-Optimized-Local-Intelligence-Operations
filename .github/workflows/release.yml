@@ -12,23 +12,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Install folio
         run: |
           python -m pip install -U pip
           pip install -e .
-      - name: Build index from curated sources
+
+      - name: Pack index for release
         run: |
+          set -euo pipefail
           export FOLIO_HOME="${RUNNER_TEMP}/folio-home"
-          folio build
+          mkdir -p dist
+          # Bundled config ships sources: [] — full rebuild is maintainer-local.
+          # CI refreshes the already-published pack so bootstrap keeps working.
+          folio bootstrap --force
           folio status
           folio pack --dest dist/folio-index.tar.gz
+          test -s dist/folio-index.tar.gz
+
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
           files: dist/folio-index.tar.gz
           generate_release_notes: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
