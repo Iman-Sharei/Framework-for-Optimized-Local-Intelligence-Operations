@@ -45,7 +45,7 @@
 
 ## ✨ Why
 
-<img align="right" width="260" src="docs/assets/folio-owl.jpg" alt="folio owl mascot — standing with a notebook">
+<img align="right" width="280" src="docs/assets/folio-owl.png" alt="folio owl mascot — standing with a notebook">
 
 Dumping a whole curriculum into chat wastes tokens and still hallucinates. folio pays the index cost once, then every answer stays small.
 
