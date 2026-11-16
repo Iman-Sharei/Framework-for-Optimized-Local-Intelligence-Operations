@@ -315,6 +315,9 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    # Maintainer indexes keep source_id=langchain-docs-nav. Published packs
+    # strip source ids, so the same filter returns nothing — fall back to an
+    # unfiltered retrieve and keep only docs.langchain.com URLs from the text.
     hits = retrieve(
         cfg,
         args.query,
@@ -322,11 +325,19 @@ def cmd_docs_suggest(args: argparse.Namespace) -> int:
         use_rerank=False,
         source_filter="langchain-docs-nav",
     )
+    if not hits:
+        hits = retrieve(
+            cfg,
+            args.query,
+            final_k=args.k,
+            use_rerank=False,
+            source_filter=None,
+        )
     urls = recommend_doc_urls_from_hits(hits, limit=args.limit)
     if not urls:
         print(
-            "No docs.langchain.com URLs in langchain-docs-nav hits. "
-            "Broaden the query or re-add sidebars.json.",
+            "No docs.langchain.com URLs found. "
+            "Try a sharper LangChain/LangGraph task, or re-bootstrap the index.",
             file=sys.stderr,
         )
         return 1
