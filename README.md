@@ -75,7 +75,7 @@ Your agent loads only the capped hits, then decides. No curriculum dump. No nami
 
 ## 📥 Install
 
-Current package release: **0.4.8** (`folio-cli` on PyPI).
+Current package release: **0.4.9** (`folio-cli` on PyPI).
 
 ```bash
 uv tool install folio-cli
