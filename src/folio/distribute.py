@@ -14,7 +14,7 @@ from typing import Any
 from .config import ensure_data_dirs, resolve_out_dir, write_default_config
 from .ingest import index_version_now, ingest
 from .sync import sync_sources
-from .term import path_link, url_link
+from .term import DownloadBar, path_link, url_link
 
 # Files/dirs included in a portable index pack (query-ready without sources).
 _PACK_MEMBERS = ("chroma", "bm25", "manifest.json", "config.yaml")
@@ -157,24 +157,45 @@ def bootstrap_index(
 
 
 def _download(url: str, dest: Path, *, attempts: int = 4) -> None:
-    """Download a release asset. GitHub often resets a long transfer once."""
+    """Download a release asset with a live linear progress chart.
+
+    GitHub often resets a long transfer once; we retry a few times.
+    """
     request = urllib.request.Request(url, headers={"User-Agent": "folio-cli"})
     last: Exception | None = None
     for attempt in range(1, attempts + 1):
+        bar: DownloadBar | None = None
         try:
             with urllib.request.urlopen(request, timeout=180) as response, dest.open("wb") as handle:
+                # Content-Length may be missing on some CDNs; still show a live bar.
+                raw_len = response.headers.get("Content-Length")
+                total = int(raw_len) if raw_len and raw_len.isdigit() else None
+                bar = DownloadBar(total, label="folio-index.tar.gz")
                 while True:
                     chunk = response.read(1024 * 256)
                     if not chunk:
                         break
                     handle.write(chunk)
+                    bar.update(len(chunk))
+                bar.close()
             return
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
             last = exc
+            if bar is not None:
+                # Finish the line so retries don't overwrite a half-drawn bar.
+                try:
+                    sys.stderr.write("\n")
+                    sys.stderr.flush()
+                except Exception:
+                    pass
             dest.unlink(missing_ok=True)
             if attempt == attempts:
                 break
-            print(f"[bootstrap] download interrupted ({exc}); retry {attempt + 1}/{attempts}", file=sys.stderr)
+            print(
+                f"[bootstrap] download interrupted ({exc}); "
+                f"retry {attempt + 1}/{attempts}",
+                file=sys.stderr,
+            )
             time.sleep(min(2 ** attempt, 8))
     raise RuntimeError(f"Failed to download index: {last}") from last
 
