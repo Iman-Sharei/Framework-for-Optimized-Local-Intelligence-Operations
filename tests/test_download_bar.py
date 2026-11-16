@@ -17,9 +17,9 @@ def test_fmt_bytes_and_eta():
 def test_download_bar_stays_on_one_line(monkeypatch):
     buf = io.StringIO()
     buf.isatty = lambda: True  # type: ignore[method-assign]
-    monkeypatch.setattr("folio.term._term_cols", lambda: 80)
+    monkeypatch.setattr("folio.term._term_cols", lambda: 100)
 
-    bar = DownloadBar(1000, label="pack", width=10, stream=buf)
+    bar = DownloadBar(1000, label="pack", width=12, stream=buf)
     bar.update(250)
     bar.update(250)
     bar.update(500)
@@ -27,27 +27,40 @@ def test_download_bar_stays_on_one_line(monkeypatch):
     # While updating: clear+CR only — no newline spam.
     assert mid.count("\n") == 0
     assert "\033[2K\r" in mid
-    assert "[" in mid and "]" in mid
+    assert "█" in mid or "░" in mid
 
     bar.close()
     text = buf.getvalue()
     # Exactly one newline — the final close.
     assert text.count("\n") == 1
-    assert "100%" in text or "100 %" in text or "100%" in text.replace(" ", "")
+    assert "100%" in text.replace(" ", "")
     assert "done" in text
+    assert "✓" in text
 
 
 def test_download_bar_line_never_exceeds_terminal_width(monkeypatch):
+    from folio.term import _visible_len
+
     buf = io.StringIO()
     buf.isatty = lambda: True  # type: ignore[method-assign]
     monkeypatch.setattr("folio.term._term_cols", lambda: 50)
 
     bar = DownloadBar(10**9, label="folio-index.tar.gz-very-long-name", width=30, stream=buf)
     bar.update(10**8)
-    # Strip ANSI / CR and measure visible payload.
     raw = buf.getvalue().split("\r")[-1]
     visible = raw.replace("\033[2K", "")
-    assert len(visible) <= 50
+    assert _visible_len(visible) <= 50
+
+
+def test_smooth_bar_monotonic():
+    from folio.term import _smooth_bar
+
+    a = _smooth_bar(0.0, 10)
+    b = _smooth_bar(0.5, 10)
+    c = _smooth_bar(1.0, 10)
+    assert len(a) == len(b) == len(c) == 10
+    assert c == "█" * 10
+    assert a.count("█") <= b.count("█") <= c.count("█")
 
 
 def test_download_writes_file_and_reports_progress(tmp_path: Path, monkeypatch):

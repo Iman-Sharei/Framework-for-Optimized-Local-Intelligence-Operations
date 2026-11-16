@@ -81,10 +81,43 @@ def _term_cols() -> int:
         return 80
 
 
+def _ansi(enabled: bool, code: str, text: str) -> str:
+    if not enabled:
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def _visible_len(text: str) -> int:
+    """Length ignoring ANSI color sequences (for wrap-safe truncation)."""
+    import re
+
+    return len(re.sub(r"\033\[[0-9;]*m", "", text))
+
+
+def _smooth_bar(frac: float, width: int) -> str:
+    """Partial-block progress track (█ + ▏▎▍▌▋▊▉)."""
+    frac = min(1.0, max(0.0, frac))
+    phases = " ▏▎▍▌▋▊▉█"
+    exact = frac * width
+    whole = int(exact)
+    rem = int(round((exact - whole) * 8))
+    rem = min(8, max(0, rem))
+    if whole >= width:
+        return "█" * width
+    if rem >= 8:
+        whole += 1
+        if whole >= width:
+            return "█" * width
+        return "█" * whole + "░" * (width - whole)
+    if rem <= 0:
+        return "█" * whole + "░" * (width - whole)
+    return "█" * whole + phases[rem] + "░" * (width - whole - 1)
+
+
 class DownloadBar:
     """One in-place progress line (never spams newlines).
 
-    Uses CR + erase-line so the terminal keeps a single chart. Line length is
+    Uses CR + erase-line so the terminal keeps a single chart. Visible length is
     capped to the terminal width so wrapping cannot flood the screen.
     """
 
@@ -93,18 +126,20 @@ class DownloadBar:
         total: int | None,
         *,
         label: str = "download",
-        width: int = 20,
+        width: int = 22,
         stream=None,
     ) -> None:
         self.total = int(total) if total and total > 0 else None
-        self.label = label
-        self.width = max(8, width)
+        # Short label keeps the chart readable on narrow terminals.
+        self.label = "folio-index" if label.startswith("folio-index") else label
+        self.width = max(10, width)
         self.stream = stream or sys.stderr
         self.done = 0
         self._t0 = time.monotonic()
         self._last_draw = 0.0
         self._closed = False
         self._enabled = bool(getattr(self.stream, "isatty", lambda: False)())
+        self._color = self._enabled and os.environ.get("NO_COLOR") is None
         if os.environ.get("FOLIO_NO_PROGRESS", "").strip().lower() in {"1", "true", "yes"}:
             self._enabled = False
 
@@ -114,7 +149,7 @@ class DownloadBar:
         self.done += max(0, int(n))
         now = time.monotonic()
         # Throttle redraws; first chunk always paints.
-        if self._enabled and (self._last_draw == 0.0 or now - self._last_draw >= 0.2):
+        if self._enabled and (self._last_draw == 0.0 or now - self._last_draw >= 0.15):
             self._draw(finished=False)
             self._last_draw = now
 
@@ -141,33 +176,45 @@ class DownloadBar:
     def _render(self, *, finished: bool) -> str:
         elapsed = max(time.monotonic() - self._t0, 1e-6)
         rate = self.done / elapsed
+        c = self._color
         if self.total:
             frac = 1.0 if finished else min(1.0, self.done / self.total)
-            filled = int(round(frac * self.width))
-            bar = "#" * filled + "-" * (self.width - filled)
+            bar = _smooth_bar(frac, self.width)
             pct = int(round(frac * 100))
             eta = "done" if finished else _fmt_eta((self.total - self.done) / rate if rate > 0 else None)
-            return (
-                f"{self.label} [{bar}] {pct:3d}% "
-                f"{_fmt_bytes(self.done)}/{_fmt_bytes(self.total)} "
-                f"{_fmt_bytes(rate)}/s ETA {eta}"
+            # Teal track + bright percent (folio palette).
+            bar_col = _ansi(c, "36;1", bar)  # bright cyan
+            pct_col = _ansi(c, "32;1" if finished else "36;1", f"{pct:3d}%")
+            meta = _ansi(
+                c,
+                "90",
+                f"{_fmt_bytes(self.done)}/{_fmt_bytes(self.total)}  {_fmt_bytes(rate)}/s  ETA {eta}",
             )
-        # Unknown size — pulse within fixed width, still one line.
-        pos = int((time.monotonic() * 6) % self.width)
-        cells = ["-"] * self.width
-        for i in range(max(0, pos - 1), min(self.width, pos + 2)):
-            cells[i] = "#"
-        return (
-            f"{self.label} [{''.join(cells)}] "
-            f"{_fmt_bytes(self.done)} {_fmt_bytes(rate)}/s"
-        )
+            mark = _ansi(c, "32", "✓") if finished else _ansi(c, "36", "↓")
+            return f"{mark} {self.label}  {bar_col}  {pct_col}  {meta}"
+
+        # Unknown size — soft moving pulse, still one line.
+        pos = int((time.monotonic() * 8) % self.width)
+        cells = ["░"] * self.width
+        for i in range(max(0, pos - 2), min(self.width, pos + 3)):
+            cells[i] = "█"
+        bar = _ansi(c, "36;1", "".join(cells))
+        meta = _ansi(c, "90", f"{_fmt_bytes(self.done)}  {_fmt_bytes(rate)}/s")
+        return f"{_ansi(c, '36', '↓')} {self.label}  {bar}  {meta}"
 
     def _draw(self, *, finished: bool) -> None:
-        # Cap to terminal width - 1 so the line never wraps (wrap + \\r = flood).
+        # Cap visible width so wrap + CR cannot flood the screen.
         cols = _term_cols()
         text = self._render(finished=finished)
-        if len(text) > cols - 1:
-            text = text[: cols - 4] + "..."
+        while _visible_len(text) > cols - 1 and self.width > 8:
+            self.width -= 2
+            text = self._render(finished=finished)
+        if _visible_len(text) > cols - 1:
+            # Last resort: strip colors and hard-trim.
+            import re
+
+            plain = re.sub(r"\033\[[0-9;]*m", "", text)
+            text = plain[: cols - 4] + "..."
         # Erase whole line, then carriage-return overwrite (single chart).
         self.stream.write("\033[2K\r" + text)
         self.stream.flush()
