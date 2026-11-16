@@ -157,44 +157,28 @@ Writes into the project by default (`.agents/skills/<name>/`, plus Claude/Codex 
 
 > ⚖️ Bring files you have the right to use. folio does not ship book content — it only structures **your** copy locally.
 
-To **index** a PDF into the shared RAG pack (maintainer path), use `folio add` instead.
-
 ---
 
 ## ⌨️ Commands
 
 ```bash
-folio banner
 folio bootstrap
 folio update
 folio status
-folio query "<question>" [--json] [-k N] [--budget N]
+folio query "<question>" [--budget N]
 folio install --project [--platform cursor|claude|codex|agents|all]
 folio uninstall --project [--platform cursor|claude|codex|agents]
 folio skill-from <path> [--name NAME] [--platform agents|claude|codex|all]
 folio docs-suggest "<LangChain task>"
 ```
 
-`folio banner` prints the HyperTerminal-style ASCII splash (also shown by `folio status`).
-
 `folio query` still searches the **full** index. `--budget` only caps what is printed (default **2000** tokens).
-
----
-
-## 🧪 Tests
-
-```bash
-uv sync
-uv run pytest -q
-```
-
-CI: [GitHub Actions](https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml)
 
 ---
 
 ## 🛠️ Maintainer
 
-Users do **not** add documents. `folio add` is for publishing a new pack.
+Users do **not** add documents. `folio add` / `folio pack` are for publishing a new pack.
 
 ```bash
 folio add /path/to/file.pdf|.md|.txt|.json
@@ -206,6 +190,11 @@ gh release upload "$TAG" dist/folio-index.tar.gz --clobber --repo Iman-Sharei/fo
 
 Publish the program by tagging `vX.Y.Z`. That uses the GitHub Environment [`pypi`](https://github.com/Iman-Sharei/folio/settings/environments) and a [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/) for [`folio-cli`](https://pypi.org/project/folio-cli/).
 
+```bash
+uv sync && uv run pytest -q
+```
+
+CI: [GitHub Actions](https://github.com/Iman-Sharei/folio/actions/workflows/ci.yml)
 ---
 
 ## 🔗 Links
