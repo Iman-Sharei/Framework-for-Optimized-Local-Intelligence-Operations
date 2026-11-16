@@ -14,3 +14,4 @@ data/
 *.pkl
 *.tar.gz
 .env
+sources.local.yaml

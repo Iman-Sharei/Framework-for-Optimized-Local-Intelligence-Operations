@@ -106,6 +106,18 @@ folio update
 
 Pack: [`folio-index.tar.gz`](https://github.com/Iman-Sharei/folio/releases/latest/download/folio-index.tar.gz)
 
+### How the vectors are made
+
+A published pack does not include a source catalog. `folio sources` prints the build settings stored in the installed manifest: model, window, pooling, and chunk sizes. It does not print source names.
+
+Vectors are Chroma's ONNX MiniLM-L6-v2 embeddings (256-token model). Passages longer than 200 tokens are split into windows of 200 with a 40-token overlap, embedded, and mean-pooled so the tail is not dropped. The same chunks are scored with BM25. Default chunk settings: `max_chars` 1200, `overlap_chars` 150, `min_chars` 80, `max_tokens` 200, `overlap_tokens` 40.
+
+```bash
+folio sources
+```
+
+The chunk text is what retrieval returns. Hiding names does not hide that text.
+
 ---
 
 ## 🧩 Use in a project
@@ -165,6 +177,7 @@ Writes into the project by default (`.agents/skills/<name>/`, plus Claude/Codex 
 folio bootstrap
 folio update
 folio status
+folio sources
 folio query "<question>" [--budget N]
 folio install --project [--platform cursor|claude|codex|agents|all]
 folio uninstall --project [--platform cursor|claude|codex|agents]
@@ -178,7 +191,7 @@ folio docs-suggest "<LangChain task>"
 
 ## 🛠️ Maintainer
 
-Users do **not** add documents. `folio add` / `folio pack` are for publishing a new pack.
+Users do **not** add documents. Building and publishing the shared database is a local maintainer workflow: sources stay in `sources.local.yaml` on that machine, and `folio pack` writes a tarball with no source names. See [docs/maintainer.md](docs/maintainer.md).
 
 ```bash
 folio add /path/to/file.pdf|.md|.txt|.json

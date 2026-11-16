@@ -29,6 +29,10 @@ def test_ingest_and_hybrid_retrieve_returns_relevant_citations(
     assert manifest["chunks"] >= 3
     assert "index_version" in manifest
     assert "cli_version" in manifest
+    assert manifest["embedding"]["model"] == "onnx-minilm-l6-v2"
+    assert manifest["embedding"]["window_tokens"] == 200
+    assert manifest["embedding"]["pooling"] == "mean"
+    assert "max_chars" in manifest["chunking"]
     assert mini_cfg["paths"]["manifest_path"].exists()
     # Ingest writes JSON even if a legacy config still named the path *.pkl.
     assert bm25_index_path(mini_cfg["paths"]["bm25_path"]).exists()

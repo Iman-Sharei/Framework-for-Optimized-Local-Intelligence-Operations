@@ -9,12 +9,65 @@ from tqdm import tqdm
 from . import __version__ as cli_version
 from .chunk import Chunk, chunk_file
 from .config import ensure_data_dirs
-from .store import build_bm25, reset_collection, save_bm25, upsert_chunks
+from .store import (
+    EMBED_MODEL_MAX_TOKENS,
+    EMBED_WINDOW_OVERLAP,
+    EMBED_WINDOW_TOKENS,
+    build_bm25,
+    get_collection,
+    reset_collection,
+    save_bm25,
+    upsert_chunks,
+)
+from .add_doc import _merge_bm25
 from .sync import iter_markdown
 
 
 def index_version_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y.%m.%d")
+
+
+def index_build_metadata(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Embedding and chunking facts recorded in manifest.json."""
+    chunk = cfg.get("chunking") or {}
+    model = (cfg.get("embedding") or {}).get("model") or "onnx-minilm-l6-v2"
+
+    def _opt_int(key: str) -> int | None:
+        value = chunk.get(key)
+        if value in (None, ""):
+            return None
+        return int(value)
+
+    return {
+        "embedding_model": model,
+        "embedding": {
+            "model": model,
+            "provider": "chromadb-onnx-minilm-l6-v2",
+            "max_tokens": EMBED_MODEL_MAX_TOKENS,
+            "window_tokens": EMBED_WINDOW_TOKENS,
+            "window_overlap_tokens": EMBED_WINDOW_OVERLAP,
+            "pooling": "mean",
+        },
+        "chunking": {
+            "max_chars": int(chunk.get("max_chars", 1200)),
+            "overlap_chars": int(chunk.get("overlap_chars", 150)),
+            "min_chars": int(chunk.get("min_chars", 80)),
+            "max_tokens": _opt_int("max_tokens"),
+            "overlap_tokens": _opt_int("overlap_tokens"),
+        },
+    }
+
+
+def manifest_source_entry(src: dict[str, Any]) -> dict[str, Any]:
+    entry = {
+        "id": src.get("id"),
+        "repo": src.get("repo"),
+        "sparse_path": src.get("sparse_path", "."),
+    }
+    for key in ("kind", "branch", "recovered_from"):
+        if src.get(key):
+            entry[key] = src[key]
+    return entry
 
 
 def ingest(cfg: dict[str, Any], *, rebuild: bool = True) -> dict[str, Any]:
@@ -35,13 +88,22 @@ def ingest(cfg: dict[str, Any], *, rebuild: bool = True) -> dict[str, Any]:
             max_chars=int(chunk_cfg["max_chars"]),
             overlap_chars=int(chunk_cfg["overlap_chars"]),
             min_chars=int(chunk_cfg["min_chars"]),
+            max_tokens=int(chunk_cfg["max_tokens"]) if chunk_cfg.get("max_tokens") else None,
+            overlap_tokens=int(chunk_cfg["overlap_tokens"]) if chunk_cfg.get("overlap_tokens") else None,
         )
         all_chunks.extend(chunks)
 
-    collection = reset_collection(cfg) if rebuild else reset_collection(cfg)
+    if rebuild:
+        collection = reset_collection(cfg)
+    else:
+        collection = get_collection(cfg, create=True)
     n = upsert_chunks(collection, all_chunks, batch_size=int(cfg["embedding"]["batch_size"]))
-    bm25, ids, chunks = build_bm25(all_chunks)
-    save_bm25(cfg["paths"]["bm25_path"], bm25, ids, chunks)
+    if rebuild:
+        bm25, ids, chunks = build_bm25(all_chunks)
+        save_bm25(cfg["paths"]["bm25_path"], bm25, ids, chunks)
+    else:
+        _merge_bm25(cfg, all_chunks)
+        n = len(all_chunks)
 
     index_version = index_version_now()
     manifest = {
@@ -50,16 +112,9 @@ def ingest(cfg: dict[str, Any], *, rebuild: bool = True) -> dict[str, Any]:
         "ingested_at": datetime.now(timezone.utc).isoformat(),
         "files": len(files),
         "chunks": n,
-        "embedding_model": cfg["embedding"]["model"],
         "collection": cfg["collection"]["name"],
-        "sources": [
-            {
-                "id": s["id"],
-                "repo": s["repo"],
-                "sparse_path": s["sparse_path"],
-            }
-            for s in cfg["sources"]
-        ],
+        **index_build_metadata(cfg),
+        "sources": [manifest_source_entry(s) for s in cfg["sources"]],
         "file_list": [
             {"source_id": sid, "path": str(p.relative_to(sources_dir))}
             for sid, p in files

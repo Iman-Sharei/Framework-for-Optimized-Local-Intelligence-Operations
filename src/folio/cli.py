@@ -102,7 +102,7 @@ def cmd_update(args: argparse.Namespace) -> int:
 
 def cmd_pack(args: argparse.Namespace) -> int:
     cfg = _cfg(args)
-    pack_index(cfg, dest=args.dest)
+    pack_index(cfg, dest=args.dest, keep_headings=bool(getattr(args, "keep_headings", False)))
     return 0
 
 
@@ -175,6 +175,88 @@ def cmd_status(args: argparse.Namespace) -> int:
             "cli_version",
         )
         print(json.dumps({k: data[k] for k in keys if k in data}, indent=2))
+        recorded = data.get("sources")
+        count = len(recorded) if isinstance(recorded, list) else None
+        if count:
+            print(f"sources:  {count} local entries (not included in a published pack)")
+        else:
+            print("sources:  not included in this index")
+        print("build:    folio sources")
+    return 0
+
+
+def cmd_sources(args: argparse.Namespace) -> int:
+    """Print how this index was built. Does not print source names or paths."""
+    if getattr(args, "out", None) is None:
+        migrate_legacy_index()
+    cfg = _cfg(args)
+    manifest = Path(cfg["paths"]["manifest_path"])
+    if not manifest.exists():
+        print(
+            "error: no index manifest found. Run `folio bootstrap` or `folio build` first "
+            f"(expected {manifest})",
+            file=sys.stderr,
+        )
+        return 2
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    recorded = data.get("sources")
+    source_count = len(recorded) if isinstance(recorded, list) else 0
+    payload = {
+        "manifest": str(manifest),
+        "index_version": data.get("index_version"),
+        "cli_version": data.get("cli_version"),
+        "ingested_at": data.get("ingested_at"),
+        "files": data.get("files"),
+        "chunks": data.get("chunks"),
+        "collection": data.get("collection"),
+        "embedding_model": data.get("embedding_model"),
+        "embedding": data.get("embedding"),
+        "chunking": data.get("chunking"),
+        "source_count": source_count,
+        "source_catalog": "omitted",
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    print(f"manifest: {manifest}")
+    print(f"index:    {payload['index_version'] or 'not recorded'}")
+    print(f"built by: folio {payload['cli_version'] or 'not recorded'}")
+    print(f"files:    {payload['files'] if payload['files'] is not None else 'not recorded'}")
+    print(f"chunks:   {payload['chunks'] if payload['chunks'] is not None else 'not recorded'}")
+    if payload["embedding"]:
+        emb = payload["embedding"]
+        print(
+            "embedding: "
+            f"{emb.get('model') or payload['embedding_model']} "
+            f"provider={emb.get('provider', 'not recorded')} "
+            f"max_tokens={emb.get('max_tokens', 'not recorded')} "
+            f"window_tokens={emb.get('window_tokens', 'not recorded')} "
+            f"window_overlap_tokens={emb.get('window_overlap_tokens', 'not recorded')} "
+            f"pooling={emb.get('pooling', 'not recorded')}"
+        )
+    else:
+        model = payload["embedding_model"] or "not recorded"
+        print(f"embedding: {model}")
+        print("embedding window: not recorded in this index")
+    if payload["chunking"]:
+        ch = payload["chunking"]
+        print(
+            "chunking: "
+            f"max_chars={ch.get('max_chars', 'not recorded')} "
+            f"overlap_chars={ch.get('overlap_chars', 'not recorded')} "
+            f"min_chars={ch.get('min_chars', 'not recorded')} "
+            f"max_tokens={ch.get('max_tokens', 'not recorded')} "
+            f"overlap_tokens={ch.get('overlap_tokens', 'not recorded')}"
+        )
+    else:
+        print("chunking: not recorded in this index")
+    if source_count:
+        print(
+            f"sources:  {source_count} kept only in this local index. "
+            "Names are not printed and are removed from a published pack."
+        )
+    else:
+        print("sources:  not included in this index")
     return 0
 
 
@@ -313,6 +395,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Output tarball path (default: dist/folio-index-<version>.tar.gz)",
     )
+    p_pack.add_argument(
+        "--keep-headings",
+        action="store_true",
+        help="Keep heading titles in the published pack. Source ids and file paths are still removed.",
+    )
     p_pack.set_defaults(func=cmd_pack)
 
     p_query = sub.add_parser(
@@ -348,6 +435,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the ASCII splash banner",
     )
     p_status.set_defaults(func=cmd_status)
+
+    p_sources = sub.add_parser(
+        "sources",
+        help="Show embedding model, chunk settings, and index counts (no source names)",
+    )
+    _add_out_arg(p_sources)
+    p_sources.add_argument("--json", action="store_true", help="Print the manifest summary as JSON")
+    p_sources.set_defaults(func=cmd_sources)
 
     p_install = sub.add_parser(
         "install",

@@ -18,6 +18,9 @@ chunking:
   max_chars: 1200
   overlap_chars: 150
   min_chars: 80
+  # MiniLM keeps 256 tokens. 200 keeps a margin; code is ~3 chars/token.
+  max_tokens: 200
+  overlap_tokens: 40
 
 embedding:
   model: onnx-minilm-l6-v2
@@ -31,7 +34,9 @@ retrieval:
   bm25_k: 20
   final_k: 8
   rrf_k: 60
-  crag_min_best_score: 0.012
+  # Minimum best dense cosine similarity. Below this, candidate k is widened.
+  # This is not an RRF score: rank 1 is always about 0.016 and used to sit above 0.012.
+  crag_min_best_score: 0.20
   crag_widen_factor: 2
   reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2
   confidence_floor: 0.008

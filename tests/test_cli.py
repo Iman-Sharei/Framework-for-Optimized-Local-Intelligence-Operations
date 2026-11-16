@@ -24,6 +24,53 @@ def test_cli_status(folio_home: Path, capsys: pytest.CaptureFixture[str]):
     assert str(folio_home) in out
 
 
+def test_cli_sources_requires_manifest(folio_home: Path):
+    code = main(["sources", "--out", str(folio_home)])
+    assert code == 2
+
+
+def test_cli_sources_does_not_reveal_identities(folio_home: Path, capsys: pytest.CaptureFixture[str]):
+    manifest = {
+        "index_version": "2026.11.16",
+        "cli_version": "0.4.6",
+        "files": 3,
+        "chunks": 9,
+        "embedding_model": "onnx-minilm-l6-v2",
+        "embedding": {
+            "model": "onnx-minilm-l6-v2",
+            "provider": "chromadb-onnx-minilm-l6-v2",
+            "max_tokens": 256,
+            "window_tokens": 200,
+            "window_overlap_tokens": 40,
+            "pooling": "mean",
+        },
+        "chunking": {"max_chars": 1200, "max_tokens": 200, "overlap_tokens": 40},
+        "sources": [
+            {
+                "id": "secret-corpus",
+                "repo": "https://secret.example/internal.git",
+                "sparse_path": "lessons",
+            }
+        ],
+        "file_list": [{"source_id": "secret-corpus", "path": "secret-corpus/secret.md"}],
+    }
+    (folio_home / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    code = main(["sources", "--out", str(folio_home)])
+    assert code == 0
+    text = capsys.readouterr().out
+    assert "secret.example" not in text
+    assert "secret-corpus" not in text
+    assert "window_tokens=200" in text
+    code = main(["sources", "--json", "--out", str(folio_home)])
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    blob = json.dumps(payload)
+    assert "secret" not in blob
+    assert payload["source_catalog"] == "omitted"
+    assert payload["source_count"] == 1
+    assert payload["embedding"]["window_tokens"] == 200
+
+
 def test_cli_query_requires_index(folio_home: Path):
     code = main(["query", "anything", "--out", str(folio_home)])
     assert code == 2

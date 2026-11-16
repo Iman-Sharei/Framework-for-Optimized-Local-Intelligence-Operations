@@ -31,6 +31,11 @@ def _file_hash(text: str) -> str:
 
 
 def _split_oversized(text: str, max_chars: int, overlap: int) -> list[str]:
+    # overlap >= window never advances `start` and the loop does not return.
+    max_chars = max(int(max_chars), 1)
+    overlap = max(int(overlap), 0)
+    if overlap >= max_chars:
+        overlap = max_chars - 1
     if len(text) <= max_chars:
         return [text]
     parts: list[str] = []
@@ -77,6 +82,78 @@ def _split_oversized(text: str, max_chars: int, overlap: int) -> list[str]:
     return overlapped
 
 
+_FENCE_RE = re.compile(r"^(?P<mark>`{3,}|~{3,})(?P<info>.*)$", re.MULTILINE)
+
+
+def _fence_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans of fenced code blocks. Headings inside them are not structure."""
+    spans: list[tuple[int, int]] = []
+    open_at: int | None = None
+    fence_char = ""
+    for match in _FENCE_RE.finditer(text):
+        mark = match.group("mark")
+        if open_at is None:
+            open_at = match.start()
+            fence_char = mark[0]
+            continue
+        if mark[0] == fence_char:
+            spans.append((open_at, match.end()))
+            open_at = None
+            fence_char = ""
+    if open_at is not None:
+        spans.append((open_at, len(text)))
+    return spans
+
+
+def _inside_span(pos: int, spans: list[tuple[int, int]]) -> bool:
+    return any(start <= pos < end for start, end in spans)
+
+
+def _attach_short_pieces(
+    pieces: list[tuple[str, str]],
+    *,
+    min_chars: int,
+) -> list[tuple[str, str]]:
+    """Keep text under min_chars by merging it into a neighbor instead of dropping it."""
+    if not pieces:
+        return []
+    merged: list[tuple[str, str]] = []
+    pending: list[tuple[str, str]] = []
+
+    def _glue(base: str, extra: str) -> str:
+        extra = extra.strip()
+        if not extra:
+            return base
+        if not base:
+            return extra
+        return f"{base.rstrip()}\n\n{extra}"
+
+    for heading, piece in pieces:
+        piece = piece.strip()
+        if not piece:
+            continue
+        if len(piece) < min_chars:
+            pending.append((heading, piece))
+            continue
+        heading_out = heading
+        body = piece
+        if pending:
+            body = _glue("\n\n".join(p for _, p in pending), piece)
+            if not heading_out:
+                heading_out = next((h for h, _ in pending if h), heading)
+            pending = []
+        merged.append((heading_out, body))
+    if pending:
+        extra = "\n\n".join(p for _, p in pending)
+        if merged:
+            heading, body = merged[-1]
+            merged[-1] = (heading, _glue(body, extra))
+        else:
+            heading = next((h for h, _ in pending if h), "")
+            merged.append((heading, extra.strip()))
+    return merged
+
+
 def chunk_markdown(
     text: str,
     *,
@@ -85,11 +162,20 @@ def chunk_markdown(
     max_chars: int = 1200,
     overlap_chars: int = 150,
     min_chars: int = 80,
+    max_tokens: int | None = None,
+    overlap_tokens: int | None = None,
 ) -> list[Chunk]:
     """Structure-aware chunking: split on markdown headings, then size-guard."""
     content_hash = _file_hash(text)
+    # A 200-token MiniLM window is about 3 characters per token on code-like text.
+    if max_tokens and max_tokens > 0:
+        token_chars = max(40, int(max_tokens) * 3)
+        max_chars = min(max_chars, token_chars)
+        if overlap_tokens and overlap_tokens > 0:
+            overlap_chars = min(overlap_chars, max(0, int(overlap_tokens) * 3))
     sections: list[tuple[str, str]] = []
-    matches = list(HEADING_RE.finditer(text))
+    fences = _fence_spans(text)
+    matches = [m for m in HEADING_RE.finditer(text) if not _inside_span(m.start(), fences)]
 
     if not matches:
         sections.append(("", text.strip()))
@@ -112,13 +198,13 @@ def chunk_markdown(
             body = text[start:end].strip()
             sections.append((heading_path, body))
 
-    raw_chunks: list[tuple[str, str]] = []
+    sized: list[tuple[str, str]] = []
     for heading_path, body in sections:
         for piece in _split_oversized(body, max_chars, overlap_chars):
             piece = piece.strip()
-            if len(piece) < min_chars:
-                continue
-            raw_chunks.append((heading_path, piece))
+            if piece:
+                sized.append((heading_path, piece))
+    raw_chunks = _attach_short_pieces(sized, min_chars=min_chars)
 
     chunks: list[Chunk] = []
     for idx, (heading_path, piece) in enumerate(raw_chunks):
@@ -148,6 +234,8 @@ def chunk_file(
     max_chars: int,
     overlap_chars: int,
     min_chars: int,
+    max_tokens: int | None = None,
+    overlap_tokens: int | None = None,
 ) -> list[Chunk]:
     text = path.read_text(encoding="utf-8", errors="replace")
     try:
@@ -161,4 +249,6 @@ def chunk_file(
         max_chars=max_chars,
         overlap_chars=overlap_chars,
         min_chars=min_chars,
+        max_tokens=max_tokens,
+        overlap_tokens=overlap_tokens,
     )

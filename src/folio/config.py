@@ -69,6 +69,9 @@ def load_config(
     cfg = yaml.safe_load(raw)
     cfg = copy.deepcopy(cfg)
     root = resolve_out_dir(out_dir)
+    local_sources = _read_sources_local(root)
+    if local_sources is not None:
+        cfg["sources"] = local_sources
     paths = cfg.setdefault("paths", {})
     paths["sources_dir"] = root / "sources"
     paths["chroma_dir"] = root / "chroma"
@@ -78,6 +81,26 @@ def load_config(
     paths["out_dir"] = root
     cfg["_out_dir"] = root
     return cfg
+
+
+def _read_sources_local(index_root: Path) -> list | None:
+    """Sources stay on the maintainer's machine. Never stored in a pack.
+
+    The first file that exists wins: the index home, the working directory,
+    then the folio checkout.
+    """
+    candidates = (
+        index_root / "sources.local.yaml",
+        Path.cwd() / "sources.local.yaml",
+        TOOL_ROOT / "sources.local.yaml",
+    )
+    for path in candidates:
+        if not path.is_file():
+            continue
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        sources = data.get("sources")
+        return list(sources or [])
+    return None
 
 
 def ensure_data_dirs(cfg: dict[str, Any]) -> None:

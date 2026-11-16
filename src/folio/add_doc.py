@@ -17,6 +17,17 @@ from .config import ensure_data_dirs
 from .store import build_bm25, get_collection, load_bm25, save_bm25, upsert_chunks
 
 
+def _delete_source_vectors(collection, source_id: str) -> None:
+    """Remove every chunk already stored for this source before a re-add."""
+    try:
+        existing = collection.get(where={"source_id": source_id}, include=[])
+    except Exception:
+        return
+    ids = list(existing.get("ids") or [])
+    if ids:
+        collection.delete(ids=ids)
+
+
 def _slug(name: str) -> str:
     s = re.sub(r"[^a-zA-Z0-9]+", "-", name).strip("-").lower()
     return (s[:64] or "local-doc").rstrip("-")
@@ -63,12 +74,11 @@ def _walk_sidebar_links(nodes: list, trail: tuple[str, ...] = ()) -> list[tuple[
         ntype = node.get("type")
         url = node.get("url")
         children = node.get("children")
-        if ntype == "link" and url:
-            out.append((trail + ((title,) if title else ()), str(url)))
-        elif children:
-            out.extend(_walk_sidebar_links(children, trail + ((title,) if title else ())))
-        elif url and title:
-            out.append((trail + (title,), str(url)))
+        next_trail = trail + ((title,) if title else ())
+        if url and (ntype == "link" or title):
+            out.append((next_trail, str(url)))
+        if children:
+            out.extend(_walk_sidebar_links(children, next_trail))
     return out
 
 
@@ -157,10 +167,21 @@ def _merge_bm25(cfg: dict[str, Any], new_chunks: list[Chunk]) -> None:
     except FileNotFoundError:
         pass
 
+    # Chunk ids include a content hash, so an edit mints new ids. Drop the whole
+    # previous source, not only ids that happen to match the new batch.
+    source_ids = {c.source_id for c in new_chunks}
     drop = {c.chunk_id for c in new_chunks}
-    kept_ids = [i for i in existing_ids if i not in drop]
-    kept_texts = [t for i, t in zip(existing_ids, existing_texts) if i not in drop]
-    kept_metas = [m for i, m in zip(existing_ids, existing_metas) if i not in drop]
+
+    def _keep(i: str, m: dict) -> bool:
+        if i in drop:
+            return False
+        if str(m.get("source_id", "")) in source_ids:
+            return False
+        return True
+
+    kept_ids = [i for i, m in zip(existing_ids, existing_metas) if _keep(i, m or {})]
+    kept_texts = [t for i, t, m in zip(existing_ids, existing_texts, existing_metas) if _keep(i, m or {})]
+    kept_metas = [m for i, m in zip(existing_ids, existing_metas) if _keep(i, m or {})]
 
     ids = kept_ids + [c.chunk_id for c in new_chunks]
     texts = kept_texts + [c.text for c in new_chunks]
@@ -221,6 +242,8 @@ def _update_manifest(
     except FileNotFoundError:
         chunk_count = int(data.get("chunks") or 0)
 
+    from .ingest import index_build_metadata
+
     data.update(
         {
             "cli_version": cli_version,
@@ -231,10 +254,9 @@ def _update_manifest(
             "chunks": chunk_count,
             "index_version": data.get("index_version")
             or datetime.now(timezone.utc).strftime("%Y.%m.%d"),
-            "embedding_model": data.get("embedding_model")
-            or cfg.get("embedding", {}).get("model", "onnx-minilm-l6-v2"),
             "collection": data.get("collection")
             or cfg.get("collection", {}).get("name", "folio"),
+            **index_build_metadata(cfg),
         }
     )
     manifest_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -270,6 +292,8 @@ def add_local_document(
         max_chars=int(chunk_cfg["max_chars"]),
         overlap_chars=int(chunk_cfg["overlap_chars"]),
         min_chars=int(chunk_cfg["min_chars"]),
+        max_tokens=int(chunk_cfg["max_tokens"]) if chunk_cfg.get("max_tokens") else None,
+        overlap_tokens=int(chunk_cfg["overlap_tokens"]) if chunk_cfg.get("overlap_tokens") else None,
     )
     if not chunks:
         chunks = chunk_markdown(
@@ -279,11 +303,14 @@ def add_local_document(
             max_chars=int(chunk_cfg["max_chars"]),
             overlap_chars=int(chunk_cfg["overlap_chars"]),
             min_chars=min(40, int(chunk_cfg["min_chars"])),
+            max_tokens=int(chunk_cfg["max_tokens"]) if chunk_cfg.get("max_tokens") else None,
+            overlap_tokens=int(chunk_cfg["overlap_tokens"]) if chunk_cfg.get("overlap_tokens") else None,
         )
     if not chunks:
         raise RuntimeError(f"No chunks produced from {path}")
 
     collection = get_collection(cfg, create=True)
+    _delete_source_vectors(collection, sid)
     n = upsert_chunks(
         collection,
         chunks,

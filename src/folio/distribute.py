@@ -11,8 +11,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from .config import ensure_data_dirs, resolve_out_dir, write_default_config
-from .ingest import index_version_now, ingest
+from .ingest import index_build_metadata, index_version_now, ingest
+from .store import anonymize_index_copy
 from .sync import sync_sources
 from .term import DownloadBar, path_link, url_link
 
@@ -72,8 +75,37 @@ def _safe_tar_members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
     return safe
 
 
-def pack_index(cfg: dict[str, Any], *, dest: Path | None = None) -> Path:
-    """Create a tarball of the shared index for GitHub Release upload."""
+def public_manifest(data: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]:
+    """Fields a published pack may contain. No source names, paths, or URLs."""
+    build = index_build_metadata(cfg)
+    return {
+        "index_version": data.get("index_version") or index_version_now(),
+        "cli_version": data.get("cli_version"),
+        "ingested_at": data.get("ingested_at"),
+        "files": data.get("files"),
+        "chunks": data.get("chunks"),
+        "collection": data.get("collection") or cfg.get("collection", {}).get("name"),
+        "embedding_model": build["embedding_model"],
+        "embedding": build["embedding"],
+        "chunking": build["chunking"],
+    }
+
+
+def public_config(cfg_text: str) -> str:
+    """Pack config keeps retrieval knobs and an empty source list."""
+    data = yaml.safe_load(cfg_text) or {}
+    if not isinstance(data, dict):
+        data = {}
+    data["sources"] = []
+    return yaml.safe_dump(data, sort_keys=False)
+
+
+def pack_index(cfg: dict[str, Any], *, dest: Path | None = None, keep_headings: bool = False) -> Path:
+    """Create a tarball of the shared index for GitHub Release upload.
+
+    The local index is not modified. The tarball is a copy with source ids,
+    file paths, and the source catalog removed. Chunk text is still inside it.
+    """
     out = Path(cfg["paths"]["out_dir"])
     manifest_path = Path(cfg["paths"]["manifest_path"])
     if not manifest_path.exists():
@@ -86,14 +118,37 @@ def pack_index(cfg: dict[str, Any], *, dest: Path | None = None) -> Path:
     dest = dest.expanduser().resolve()
     dest.parent.mkdir(parents=True, exist_ok=True)
 
-    with tarfile.open(dest, "w:gz") as tar:
-        for name in _PACK_MEMBERS:
-            path = out / name
-            if not path.exists():
-                raise FileNotFoundError(f"Missing pack member: {path}")
-            tar.add(path, arcname=name)
+    config_path = out / "config.yaml"
+    config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    if not config_text:
+        from .config import default_config_text
 
-    print(f"[pack] wrote {dest} (index_version={version})")
+        config_text = default_config_text()
+
+    with tempfile.TemporaryDirectory(prefix="folio-pack-") as tmp:
+        stage = Path(tmp) / "stage"
+        stage.mkdir()
+        chroma_src = out / "chroma"
+        bm25_src = out / "bm25"
+        if not chroma_src.exists() or not bm25_src.exists():
+            raise FileNotFoundError(f"Missing chroma or bm25 under {out}")
+        shutil.copytree(chroma_src, stage / "chroma")
+        shutil.copytree(bm25_src, stage / "bm25")
+        (stage / "manifest.json").write_text(
+            json.dumps(public_manifest(data, cfg), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (stage / "config.yaml").write_text(public_config(config_text), encoding="utf-8")
+        anonymize_index_copy(
+            stage,
+            str(cfg.get("collection", {}).get("name") or data.get("collection") or "folio_knowledge"),
+            keep_headings=keep_headings,
+        )
+        with tarfile.open(dest, "w:gz") as tar:
+            for name in _PACK_MEMBERS:
+                tar.add(stage / name, arcname=name)
+
+    print(f"[pack] wrote {dest} (index_version={version}, sources omitted)")
     return dest
 
 
@@ -199,6 +254,41 @@ def _download(url: str, dest: Path, *, attempts: int = 4) -> None:
     raise RuntimeError(f"Failed to download index: {last}") from last
 
 
+def _replace_tree(src: Path, dest: Path) -> None:
+    """Copy ``src`` beside ``dest`` and swap only after the copy succeeds.
+
+    A failed copy leaves the previous index in place.
+    """
+    if src.is_symlink():
+        raise RuntimeError(f"Refusing symlink pack member: {src}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    incoming = dest.parent / f".{dest.name}.incoming"
+    if incoming.exists():
+        shutil.rmtree(incoming) if incoming.is_dir() else incoming.unlink()
+    try:
+        if src.is_dir():
+            shutil.copytree(src, incoming, symlinks=True, ignore_dangling_symlinks=False)
+            for path in incoming.rglob("*"):
+                if path.is_symlink():
+                    raise RuntimeError(f"Refusing symlink inside pack member {dest.name}: {path}")
+        else:
+            shutil.copy2(src, incoming, follow_symlinks=False)
+    except Exception:
+        if incoming.exists():
+            shutil.rmtree(incoming, ignore_errors=True) if incoming.is_dir() else incoming.unlink(
+                missing_ok=True
+            )
+        raise
+    backup = dest.parent / f".{dest.name}.backup"
+    if backup.exists():
+        shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
+    if dest.exists():
+        dest.rename(backup)
+    incoming.rename(dest)
+    if backup.exists():
+        shutil.rmtree(backup) if backup.is_dir() else backup.unlink()
+
+
 def _extract_into_out(archive: Path, out: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="folio-extract-") as tmp:
         staging = Path(tmp) / "staging"
@@ -208,22 +298,7 @@ def _extract_into_out(archive: Path, out: Path) -> None:
             src = staging / name
             if not src.exists():
                 raise RuntimeError(f"Invalid index pack: missing {name}")
-            dest = out / name
-            if dest.exists():
-                if dest.is_dir():
-                    shutil.rmtree(dest)
-                else:
-                    dest.unlink()
-            if src.is_symlink():
-                raise RuntimeError(f"Refusing symlink pack member: {src}")
-            if src.is_dir():
-                # symlinks=True copies link nodes as links (does not follow into secrets).
-                shutil.copytree(src, dest, symlinks=True, ignore_dangling_symlinks=False)
-                for p in dest.rglob("*"):
-                    if p.is_symlink():
-                        raise RuntimeError(f"Refusing symlink inside pack member {name}: {p}")
-            else:
-                shutil.copy2(src, dest, follow_symlinks=False)
+            _replace_tree(src, out / name)
 
 
 def update_index(
@@ -256,6 +331,14 @@ def migrate_legacy_index(legacy: Path | None = None) -> Path | None:
     dest = resolve_out_dir()
     if (dest / "manifest.json").exists():
         return dest
+    # A non-empty home that is not already an index may hold unrelated files.
+    # Do not delete it to make room for a legacy move.
+    if dest.exists() and any(dest.iterdir()):
+        print(
+            f"[migrate] {dest} is not empty and has no manifest; "
+            "leaving it in place"
+        )
+        return None
 
     candidates = []
     if legacy:
@@ -271,8 +354,14 @@ def migrate_legacy_index(legacy: Path | None = None) -> Path | None:
     for src in candidates:
         if (src / "manifest.json").exists():
             dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.exists() and any(dest.iterdir()):
+                print(
+                    f"[migrate] {dest} is not empty and has no manifest; "
+                    "leaving it in place"
+                )
+                return None
             if dest.exists():
-                shutil.rmtree(dest)
+                dest.rmdir()
             shutil.move(str(src), str(dest))
             print(f"[migrate] moved {src} → {dest}")
             return dest

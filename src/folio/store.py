@@ -1,16 +1,27 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import pickle
+import re
 import shutil
 from pathlib import Path
 from typing import Any
 
 import chromadb
+import numpy as np
 from chromadb.api.models.Collection import Collection
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 from rank_bm25 import BM25Okapi
+
+# Placeholder so an empty document does not make BM25 divide by zero.
+_EMPTY_TOKEN = "__folio_empty__"
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+# MiniLM hard window is 256. Stay under it so the tail of a passage is embedded.
+EMBED_WINDOW_TOKENS = 200
+EMBED_WINDOW_OVERLAP = 40
+EMBED_MODEL_MAX_TOKENS = 256
 
 from .chunk import Chunk
 
@@ -76,9 +87,107 @@ def _ensure_local_chroma_cache(model_cache_dir: Path | None = None) -> Path:
     return cache
 
 
+def tokenize_text(text: str) -> list[str]:
+    """Lowercase word tokens. Punctuation is not part of the token.
+
+    ``zygomorphic?`` and ``zygomorphic`` match. A blank document becomes one
+    placeholder token so BM25Okapi can still be constructed.
+    """
+    tokens = _TOKEN_RE.findall((text or "").lower())
+    return tokens or [_EMPTY_TOKEN]
+
+
+def _clamp_nonpositive_idf(bm25: BM25Okapi) -> BM25Okapi:
+    """rank_bm25's epsilon floor is negative when every idf is negative.
+
+    Matching documents then score below zero and a ``> 0`` filter drops them.
+    Pin those idf values to a small positive floor.
+    """
+    idf = getattr(bm25, "idf", None)
+    if not isinstance(idf, dict):
+        return bm25
+    for term, value in list(idf.items()):
+        try:
+            if float(value) <= 0:
+                idf[term] = 1e-3
+        except (TypeError, ValueError):
+            continue
+    return bm25
+
+
+def make_bm25(tokenized: list[list[str]]) -> BM25Okapi:
+    if not tokenized:
+        tokenized = [[_EMPTY_TOKEN]]
+    safe = [doc if doc else [_EMPTY_TOKEN] for doc in tokenized]
+    return _clamp_nonpositive_idf(BM25Okapi(safe))
+
+
+def _token_windows(text: str) -> list[str]:
+    """Split text into MiniLM windows so the tail is not truncated away."""
+    raw = text or ""
+    if not raw.strip():
+        return [raw]
+    from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
+
+    model = ONNXMiniLM_L6_V2()
+    tokenizer = model.tokenizer
+    tokenizer.no_truncation()
+    tokenizer.no_padding()
+    try:
+        encoded = tokenizer.encode(raw)
+        ids = list(encoded.ids)
+        offsets = list(encoded.offsets)
+        if len(ids) <= EMBED_MODEL_MAX_TOKENS:
+            return [raw]
+        windows: list[str] = []
+        start = 0
+        step = max(1, EMBED_WINDOW_TOKENS - EMBED_WINDOW_OVERLAP)
+        while start < len(ids):
+            end = min(start + EMBED_WINDOW_TOKENS, len(ids))
+            char_start = offsets[start][0]
+            char_end = offsets[end - 1][1]
+            piece = raw[char_start:char_end].strip()
+            if piece:
+                windows.append(piece)
+            if end >= len(ids):
+                break
+            start += step
+        return windows or [raw]
+    finally:
+        tokenizer.enable_truncation(max_length=256)
+        tokenizer.enable_padding(pad_id=0, pad_token="[PAD]", length=256)
+
+
+class TailAwareEmbedding(DefaultEmbeddingFunction):
+    """Mean-pool MiniLM windows so tokens past 256 still change the vector."""
+
+    def __call__(self, input):  # noqa: A003 - chromadb embedding signature
+        texts = ["" if item is None else str(item) for item in input]
+        windows: list[str] = []
+        counts: list[int] = []
+        for text in texts:
+            parts = _token_windows(text)
+            counts.append(len(parts))
+            windows.extend(parts)
+        from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
+
+        vectors = np.asarray(ONNXMiniLM_L6_V2()(windows), dtype=np.float64)
+        pooled: list[np.ndarray] = []
+        cursor = 0
+        for count in counts:
+            block = vectors[cursor : cursor + count]
+            cursor += count
+            mean = block.mean(axis=0)
+            norm = float(np.linalg.norm(mean))
+            if norm > 0:
+                mean = mean / norm
+            pooled.append(mean.astype(np.float32))
+        return np.stack(pooled, axis=0)
+
+
 def get_embedding_fn(model_cache_dir: Path | None = None) -> DefaultEmbeddingFunction:
     _ensure_local_chroma_cache(model_cache_dir)
-    return DefaultEmbeddingFunction()
+    return TailAwareEmbedding()
 
 
 def _chroma_client(chroma_dir: Path) -> chromadb.PersistentClient:
@@ -138,8 +247,8 @@ def upsert_chunks(collection: Collection, chunks: list[Chunk], batch_size: int =
 
 
 def build_bm25(chunks: list[Chunk]) -> tuple[BM25Okapi, list[str], list[Chunk]]:
-    tokenized = [c.text.lower().split() for c in chunks]
-    return BM25Okapi(tokenized), [c.chunk_id for c in chunks], chunks
+    tokenized = [tokenize_text(c.text) for c in chunks]
+    return make_bm25(tokenized), [c.chunk_id for c in chunks], chunks
 
 
 def bm25_index_path(path: Path) -> Path:
@@ -151,6 +260,80 @@ def bm25_index_path(path: Path) -> Path:
 
 def _bm25_json_path(path: Path) -> Path:
     return bm25_index_path(path)
+
+
+def opaque_chunk_id(old_id: str) -> str:
+    """Stable id with no source name in it."""
+    return "c" + hashlib.sha256(old_id.encode("utf-8")).hexdigest()[:16]
+
+
+def redact_chunk_metadata(meta: dict | None, new_id: str, *, keep_headings: bool) -> dict:
+    """Drop source ids, file paths, and repo URLs. Optionally keep a heading title."""
+    src = meta or {}
+    out: dict[str, Any] = {
+        "chunk_id": new_id,
+        "chunk_index": int(src.get("chunk_index") or 0),
+        "char_count": int(src.get("char_count") or 0),
+    }
+    if keep_headings and src.get("heading_path"):
+        out["heading_path"] = str(src["heading_path"])
+    return out
+
+
+def anonymize_bm25_file(path: Path, *, keep_headings: bool) -> None:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    ids = list(data.get("ids") or [])
+    texts = list(data.get("texts") or [])
+    metas = list(data.get("metadatas") or [])
+    new_ids = [opaque_chunk_id(str(i)) for i in ids]
+    new_metas = [
+        redact_chunk_metadata(m if isinstance(m, dict) else {}, new_id, keep_headings=keep_headings)
+        for m, new_id in zip(metas, new_ids)
+    ]
+    path.write_text(
+        json.dumps({"ids": new_ids, "texts": texts, "metadatas": new_metas}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    for extra in path.parent.glob("*.pkl"):
+        extra.unlink()
+
+
+def anonymize_chroma_dir(chroma_dir: Path, collection_name: str, *, keep_headings: bool) -> None:
+    """Rewrite a copied Chroma directory so ids and metadata do not name sources.
+
+    Embeddings and document text are kept. The text itself can still contain titles.
+    """
+    client = _chroma_client(chroma_dir)
+    collection = client.get_collection(name=collection_name)
+    data = collection.get(include=["documents", "metadatas", "embeddings"])
+    old_ids = list(data.get("ids") or [])
+    if not old_ids:
+        return
+    documents = list(data.get("documents") or [])
+    metadatas = list(data.get("metadatas") or [])
+    embeddings = data.get("embeddings")
+    if embeddings is None:
+        raise RuntimeError("Chroma did not return embeddings; refusing to pack without vectors")
+    new_ids = [opaque_chunk_id(str(i)) for i in old_ids]
+    new_metas = [
+        redact_chunk_metadata(m if isinstance(m, dict) else {}, new_id, keep_headings=keep_headings)
+        for m, new_id in zip(metadatas, new_ids)
+    ]
+    collection.delete(ids=old_ids)
+    batch = 64
+    for start in range(0, len(new_ids), batch):
+        end = start + batch
+        collection.add(
+            ids=new_ids[start:end],
+            documents=documents[start:end],
+            metadatas=new_metas[start:end],
+            embeddings=list(embeddings[start:end]),
+        )
+
+
+def anonymize_index_copy(root: Path, collection_name: str, *, keep_headings: bool) -> None:
+    anonymize_bm25_file(root / "bm25" / "index.json", keep_headings=keep_headings)
+    anonymize_chroma_dir(root / "chroma", collection_name, keep_headings=keep_headings)
 
 
 def save_bm25(path: Path, bm25: BM25Okapi, ids: list[str], chunks: list[Chunk]) -> Path:
@@ -180,8 +363,8 @@ def load_bm25(path: Path) -> dict[str, Any]:
         texts: list[str] = data["texts"]
         ids: list[str] = data["ids"]
         metas: list[dict] = data["metadatas"]
-        tokenized = [t.lower().split() for t in texts]
-        bm25 = BM25Okapi(tokenized) if tokenized else BM25Okapi([["_"]])
+        tokenized = [tokenize_text(t) for t in texts]
+        bm25 = make_bm25(tokenized)
         return {"bm25": bm25, "ids": ids, "texts": texts, "metadatas": metas}
 
     if pkl_path.exists():

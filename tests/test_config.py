@@ -23,6 +23,19 @@ def test_default_home_is_dot_folio():
     assert default_home() == Path.home() / ".folio"
 
 
+def test_sources_local_file_is_used_and_not_required(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "sources.local.yaml").write_text(
+        "sources:\n  - id: local-only\n    repo: /tmp/notes\n    sparse_path: .\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    cfg = load_config(out_dir=home)
+    assert cfg["sources"][0]["id"] == "local-only"
+    assert cfg["sources"][0]["repo"] == "/tmp/notes"
+
+
 def test_load_config_materializes_paths(folio_home: Path):
     write_default_config(folio_home)
     cfg = load_config(out_dir=folio_home)

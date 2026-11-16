@@ -1,0 +1,8 @@
+# Copy to sources.local.yaml. That file is gitignored and is not put in a pack.
+# folio sync / folio build read it from the folio checkout, the working
+# directory, or $FOLIO_HOME. Leave this example empty.
+sources: []
+# - id: notes
+#   repo: /absolute/path/to/a/local/tree
+#   sparse_path: .
+#   branch: main

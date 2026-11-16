@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
+import tarfile
 from pathlib import Path
 
 import pytest
+import yaml
 
 from folio.distribute import bootstrap_index, pack_index
 from folio.ingest import ingest
+from folio.retrieve import retrieve
+from folio.store import load_bm25
 from folio.sync import sync_sources
 
 
@@ -46,6 +51,31 @@ def test_pack_and_bootstrap_roundtrip(
     assert (other / "chroma").exists()
     assert (other / "bm25" / "index.json").exists()
     assert (other / "config.yaml").exists()
+
+    with tarfile.open(packed, "r:gz") as tar:
+        packed_manifest = json.load(tar.extractfile("manifest.json"))
+        packed_config = yaml.safe_load(tar.extractfile("config.yaml").read().decode("utf-8"))
+        packed_bm25 = json.load(tar.extractfile("bm25/index.json"))
+    assert "sources" not in packed_manifest
+    assert "file_list" not in packed_manifest
+    assert packed_config["sources"] == []
+    assert packed_manifest["embedding"]["window_tokens"] == 200
+    assert packed_bm25["texts"]
+    for meta in packed_bm25["metadatas"]:
+        assert "source_id" not in meta
+        assert "rel_path" not in meta
+        assert "demo" not in json.dumps(meta)
+    assert all(not str(chunk_id).startswith("demo") for chunk_id in packed_bm25["ids"])
+    local = json.loads(mini_cfg["paths"]["manifest_path"].read_text(encoding="utf-8"))
+    assert any(item.get("id") == "demo" for item in local["sources"])
+    local_bm25 = load_bm25(mini_cfg["paths"]["bm25_path"])
+    assert any(str(chunk_id).startswith("demo") for chunk_id in local_bm25["ids"])
+
+    cfg2 = load_config(out_dir=other)
+    hits = retrieve(cfg2, "hybrid retrieval BM25 dense RRF", final_k=3)
+    assert hits
+    assert all(hit.source_id == "" for hit in hits)
+    assert any("RAG" in hit.text or "RRF" in hit.text for hit in hits)
 
 
 def test_release_url_falls_back_to_bundled_when_empty():

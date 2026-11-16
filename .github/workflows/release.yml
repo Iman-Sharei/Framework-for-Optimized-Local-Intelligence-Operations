@@ -27,8 +27,9 @@ jobs:
           set -euo pipefail
           export FOLIO_HOME="${RUNNER_TEMP}/folio-home"
           mkdir -p dist
-          # Bundled config ships sources: [] — full rebuild is maintainer-local.
-          # CI refreshes the already-published pack so bootstrap keeps working.
+          # Bundled config ships sources: [] — this job does not re-embed.
+          # It downloads the current release asset and packs those bytes again.
+          # A real rebuild is scripts/rebuild_published_index.py, then a manual upload.
           folio bootstrap --force
           folio status
           folio pack --dest dist/folio-index.tar.gz

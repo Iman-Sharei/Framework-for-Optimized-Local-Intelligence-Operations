@@ -245,7 +245,8 @@ def _install_one(
     project_dir: Path,
 ) -> int:
     if platform == "cursor":
-        _cursor_install(project_dir)
+        # Without --project the help text installs into the home directory.
+        _cursor_install(project_dir if project else Path.home())
         if project:
             _write_skill(project_dir / ".agents" / "skills" / "folio" / "SKILL.md")
             # remove legacy skill dir
@@ -353,4 +354,22 @@ def uninstall(
             if out.exists():
                 shutil.rmtree(out)
                 print(f"purged {out}")
+    _strip_folio_markdown(project_dir, project=project)
     return 0
+
+
+def _strip_folio_markdown(project_dir: Path, *, project: bool) -> None:
+    """Remove the folio section install wrote into AGENTS.md / CLAUDE.md."""
+    targets = [project_dir / "AGENTS.md", project_dir / "CLAUDE.md"]
+    if not project:
+        targets.append(Path.home() / ".claude" / "CLAUDE.md")
+    for path in targets:
+        if not path.is_file():
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _AGENTS_MD_MARKER not in content:
+            continue
+        path.write_text(_strip_marker_section(content, _AGENTS_MD_MARKER), encoding="utf-8")

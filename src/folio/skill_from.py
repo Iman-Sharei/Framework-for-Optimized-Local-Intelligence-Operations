@@ -20,7 +20,7 @@ def _split_chapters(markdown: str, *, stem: str) -> list[tuple[str, str]]:
     if not text:
         return []
 
-    parts = re.split(r"(?m)^(## .+)$", text)
+    parts = re.split(r"(?m)^(#{1,6} .+)$", text)
     chapters: list[tuple[str, str]] = []
     from_headings = False
     if len(parts) >= 3:
@@ -31,12 +31,19 @@ def _split_chapters(markdown: str, *, stem: str) -> list[tuple[str, str]]:
         while i + 1 < len(parts):
             heading = parts[i].strip()
             body = parts[i + 1].strip()
-            title = re.sub(r"^##\s+", "", heading).strip() or f"section-{len(chapters)+1}"
+            title = re.sub(r"^#{1,6}\s+", "", heading).strip() or f"section-{len(chapters)+1}"
             block = f"{heading}\n\n{body}".strip()
             if preamble and not chapters:
                 block = f"{preamble}\n\n{block}".strip()
                 preamble = ""
-            chapters.append((_slug(title) or f"ch{len(chapters)+1:02d}", block))
+            slug = _slug(title) or f"ch{len(chapters)+1:02d}"
+            used = {existing for existing, _ in chapters}
+            if slug in used:
+                n = 2
+                while f"{slug}-{n}" in used:
+                    n += 1
+                slug = f"{slug}-{n}"
+            chapters.append((slug, block))
             i += 2
         if preamble and not chapters:
             chapters.append((_slug(stem), preamble))
