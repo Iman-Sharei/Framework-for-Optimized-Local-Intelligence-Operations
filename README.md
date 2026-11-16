@@ -16,10 +16,6 @@
   <img src="docs/assets/folio-banner.jpg" alt="folio — local RAG for AI engineering assistants" width="100%">
 </p>
 
-<p align="center">
-  <img src="docs/assets/folio-avatar.jpg" alt="folio mascot" width="120">
-</p>
-
 <h1 align="center">📚 folio</h1>
 
 <p align="center">
@@ -49,9 +45,20 @@
 
 ## ✨ Why
 
+<img align="right" width="260" src="docs/assets/folio-owl.jpg" alt="folio owl mascot — standing with a notebook">
+
 Dumping a whole curriculum into chat wastes tokens and still hallucinates. folio pays the index cost once, then every answer stays small.
 
+The usual workarounds don't help:
+- 📄 "I'll paste the docs into chat" → context blows up, answers get noisy
+- 🧠 "The model already knows this" → it guesses, or invents APIs
+- 📝 "I'll keep a huge notes file" → nobody opens it when coding
+
+**folio solves this with a local hybrid index your assistant queries on demand.**
+
 📏 **Default print budget: 2 000 tokens** — retrieval still ranks the full index; only what is printed is capped. That keeps assistant context lean vs pasting long docs.
+
+<br clear="all">
 
 ---
 
